@@ -293,5 +293,58 @@ def api_add_customer():
         "steps_completed": results,
         "message": f"{data['customer_name']} added successfully! Welcome email sent."
     })
+# ── MCP ENDPOINT ─────────────────────────────────────
+@app.route('/mcp', methods=['GET', 'POST'])
+def mcp_endpoint():
+    return jsonify({
+        "name": "Prosper Assistant API",
+        "version": "1.0",
+        "description": "AI-powered business agent for Nigerian SMEs",
+        "tools": [
+            {
+                "name": "get_unpaid_invoices",
+                "description": "Get all unpaid invoices and who owes money",
+                "endpoint": "/unpaid_invoices",
+                "method": "GET"
+            },
+            {
+                "name": "log_sale",
+                "description": "Log a sale with revenue and profit calculation",
+                "endpoint": "/log_sale",
+                "method": "POST"
+            },
+            {
+                "name": "create_and_send_invoice",
+                "description": "Create invoice, save to database and email to customer",
+                "endpoint": "/create_and_send_invoice",
+                "method": "POST"
+            },
+            {
+                "name": "chase_money",
+                "description": "Send payment reminders to all overdue customers",
+                "endpoint": "/chase_money",
+                "method": "POST"
+            },
+            {
+                "name": "daily_report",
+                "description": "Get daily business report with sales, revenue and outstanding debt",
+                "endpoint": "/daily_report",
+                "method": "GET"
+            },
+            {
+                "name": "mark_invoice_paid",
+                "description": "Mark an invoice as paid",
+                "endpoint": "/mark_paid",
+                "method": "POST"
+            },
+            {
+                "name": "add_customer",
+                "description": "Add a new customer and send welcome email",
+                "endpoint": "/add_customer",
+                "method": "POST"
+            }
+        ]
+    })
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 8080))
+    app.run(debug=False, host='0.0.0.0', port=port)
