@@ -1,28 +1,36 @@
-# Prosper Assistant 🧾
+# 🧾 Prosper Assistant
 
-An AI-powered business agent built for Nigerian small business owners — built with Google Cloud Agent Builder, Gemini, and Elastic
+> AI-powered business agent for Nigerian small business owners — built for the **Google Cloud Rapid Agent Hackathon**
 
-## What it does
-- Sends professional invoices via email automatically
-- Tracks unpaid debts and chases payments
-- Logs daily sales into Google Sheets via conversation
-- Searches invoice and sales history using Elastic
-- Fetches live USD/NGN exchange rates for dollar transactions
-- Surfaces real-time CBN/FIRS policy updates
+Prosper Assistant moves beyond chat. It plans, executes multi-step missions, and takes real actions — sending invoices, tracking debts, recording sales, and giving live business intelligence — all through simple conversation in plain English or Nigerian English.
 
-## Tech Stack
-- Google Cloud Vertex AI Agent Builder
-- Gemini (reasoning)
-- Elastic MCP (search & data intelligence)
-- Arize Phoenix (agent observability)
-- Gmail API (invoice delivery)
-- Google Sheets API (sales logging)
+---
 
-## Demo
-Coming soon
+## 🎯 The Problem
 
-## How to Run
-Coming soon
+There are over **39 million SMEs** in Nigeria. Most have no accountant, no business advisor, and no AI tool built for their reality. They:
+- Lose money to unpaid invoices and broken follow-up
+- Don't know if their business is profitable until it's too late
+- Can't afford modern bookkeeping software
+- Speak English or Nigerian English but get foreign-context tools
 
-## License
-MIT
+Prosper Assistant changes that.
+
+---
+
+## ⚡ What It Does
+
+| Capability | Example User Query | Real Action Taken |
+|---|---|---|
+| Track unpaid invoices | "Who owes me money?" | Queries MongoDB → returns live list |
+| Create & send invoices | "Send invoice to Emeka for ₦60,000" | Saves to DB + emails customer instantly |
+| Record cash sales | "I sold 20 bags of rice for ₦45,000" | Logs sale + calculates profit |
+| Mark invoices paid | "Mark INV-001 as paid" | Updates DB + adjusts customer balance |
+| Lifetime business report | "Give me my full business report" | Aggregates sales + invoices + customers |
+| Daily summary | "How's my business today?" | Real-time daily revenue and outstanding |
+| Specific date queries | "How were sales on 2026-05-10?" | Filters by date and returns analysis |
+| All-time summary | "Show me all my sales ever" | Full historical analysis |
+
+---
+
+## 🏗️ Architecture
