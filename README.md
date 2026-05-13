@@ -34,21 +34,28 @@ Prosper Assistant changes that.
 ---
 
 ## 🏗️ Architecture
-User Message (Plain English / Nigerian English)
-│
-▼
-Google Agent Builder (Gemini 2.5 Pro)
-│
-│ Reasons & decides which tool to call
-▼
-Prosper Assistant MCP Server (Cloud Run + FastMCP)
-│
-├──────────────────┬──────────────────┐
-▼                  ▼                  ▼
-MongoDB Atlas        Gmail API         Arize Phoenix
-(Data layer)         (Email layer)     (Observability)
-
----
+User Message
+        (English or Nigerian English)
+                     │
+                     ▼
+    ┌────────────────────────────────────┐
+    │   Google Agent Builder + Gemini    │
+    │   Reasons and decides which tool   │
+    └────────────────────────────────────┘
+                     │
+                     ▼
+    ┌────────────────────────────────────┐
+    │   Prosper Assistant MCP Server     │
+    │   FastMCP on Google Cloud Run      │
+    └────────────────────────────────────┘
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+  ┌──────────┐ ┌──────────┐ ┌──────────┐
+  │ MongoDB  │ │  Gmail   │ │  Arize   │
+  │  Atlas   │ │   API    │ │ Phoenix  │
+  │ (Data)   │ │ (Email)  │ │ (Traces) │
+  └──────────┘ └──────────┘ └──────────┘
 
 ## 🧰 Tech Stack
 
