@@ -34,7 +34,6 @@ Prosper Assistant changes that.
 ---
 
 ## 🏗️ Architecture
-## 🏗️ Architecture
 
 ```mermaid
 graph TD
