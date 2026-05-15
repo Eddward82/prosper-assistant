@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "agentquest"
-  }
+  },
+  "targets": {
+    "agentquest": {
+      "hosting": {
+        "prosper": [
+          "prosper-assistant"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

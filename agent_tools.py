@@ -15,12 +15,13 @@ sales = db["sales"]
 customers = db["customers"]
 
 # ── 1. SAVE AN INVOICE ──────────────────────────────
-def save_invoice(customer_name, customer_email, items, total_amount, business_name):
+def save_invoice(customer_name, customer_email, items, total_amount, business_name, business_id="default"):
     # Get the next invoice number
     count = invoices.count_documents({})
     invoice_number = f"INV-{str(count + 1).zfill(3)}"
     
     invoice = {
+        "business_id": business_id,
         "invoice_number": invoice_number,
         "customer_name": customer_name,
         "customer_email": customer_email,
@@ -33,6 +34,23 @@ def save_invoice(customer_name, customer_email, items, total_amount, business_na
     }
     
     invoices.insert_one(invoice)
+# Add or update customer
+    customers = db["customers"]
+    existing = customers.find_one({"customer_email": customer_email, "business_id": business_id})
+    if existing:
+        customers.update_one(
+            {"customer_email": customer_email, "business_id": business_id},
+            {"$inc": {"outstanding_balance": total_amount, "total_invoiced": total_amount}}
+        )
+    else:
+        customers.insert_one({
+            "business_id": business_id,
+            "customer_name": customer_name,
+            "customer_email": customer_email,
+            "outstanding_balance": total_amount,
+            "total_invoiced": total_amount,
+            "total_paid": 0
+        })
     
     # Update or create customer record
     customers.update_one(
@@ -52,8 +70,8 @@ def save_invoice(customer_name, customer_email, items, total_amount, business_na
     return invoice_number
 
 # ── 2. GET UNPAID INVOICES ──────────────────────────
-def get_unpaid_invoices():
-    unpaid = list(invoices.find({"status": "unpaid"}, {"_id": 0}))
+def get_unpaid_invoices(business_id="default"):
+    unpaid = list(invoices.find({"status": "unpaid", "business_id": business_id}, {"_id": 0}))
     
     if not unpaid:
         print("✅ No unpaid invoices. Everyone has paid!")
@@ -67,10 +85,11 @@ def get_unpaid_invoices():
     return unpaid
 
 # ── 3. LOG A SALE ───────────────────────────────────
-def log_sale(item, quantity, sale_amount, cost_amount):
+def log_sale(item, quantity, sale_amount, cost_amount, business_id="default"):
     profit = sale_amount - cost_amount
     
     sale = {
+        "business_id": business_id,
         "date": datetime.now().strftime("%Y-%m-%d"),
         "item": item,
         "quantity": quantity,
