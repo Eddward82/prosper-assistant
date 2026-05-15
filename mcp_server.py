@@ -301,6 +301,17 @@ async def chat_endpoint(request: Request):
                 result = record_sale(item, quantity, sale_amount, cost_amount, business_id)
         except Exception as e:
             result = "Sorry, couldn't parse. Try: 'I sold 10 biscuits for 5000, cost 3000'"
+    elif "mark" in msg_lower and "paid" in msg_lower:
+        try:
+            import re
+            inv_match = re.search(r'INV-\d+', user_message, re.IGNORECASE)
+            if not inv_match:
+                result = "Please include the invoice number. Example: 'Mark INV-009 as paid'"
+            else:
+                invoice_number = inv_match.group(0).upper()
+                result = mark_invoice_as_paid(invoice_number, business_id)
+        except Exception as e:
+            result = "Sorry, couldn't mark invoice paid. Try: 'Mark INV-009 as paid'"	
     elif "invoice" in msg_lower:
         try:
             import re
