@@ -129,25 +129,25 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .start-btn:hover{background:#16a34a;}
 
 /* CHAT INVOICE CARDS */
-.chat-invoice-list{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
-.chat-invoice-card{background:white;border:1px solid #e8eaed;border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
-.chat-invoice-card:hover{border-color:#d1d5db;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
-.cic-left{display:flex;flex-direction:column;gap:3px;min-width:0;}
-.cic-num{font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;}
-.cic-name{font-size:13px;font-weight:600;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cic-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
-.cic-amount{font-size:13px;font-weight:700;color:#d97706;}
-.cic-pay-btn{font-size:11px;font-weight:600;color:#0d3d26;background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;padding:3px 8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all 0.15s;}
+.chat-invoice-list{display:flex;flex-direction:column;gap:5px;margin-top:4px;}
+.chat-invoice-card{background:white;border:1px solid #e8eaed;border-radius:8px;padding:7px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.chat-invoice-card:hover{border-color:#d1d5db;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+.cic-left{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.cic-num{font-size:9px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;}
+.cic-name{font-size:12px;font-weight:600;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cic-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.cic-amount{font-size:12px;font-weight:700;color:#d97706;}
+.cic-pay-btn{font-size:10px;font-weight:600;color:#0d3d26;background:#dcfce7;border:1px solid #bbf7d0;border-radius:5px;padding:2px 7px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all 0.15s;}
 .cic-pay-btn:hover{background:#0d3d26;color:white;border-color:#0d3d26;}
-.chat-summary{font-size:12px;color:#6b7280;margin-bottom:6px;}
+.chat-summary{font-size:11px;color:#6b7280;margin-bottom:4px;}
 
 /* REPORT STAT CARDS IN CHAT */
-.rpt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;}
-.rpt-card{background:#f8fafc;border:1px solid #e8eaed;border-radius:8px;padding:10px 12px;}
+.rpt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:5px;}
+.rpt-card{background:#f8fafc;border:1px solid #e8eaed;border-radius:7px;padding:6px 9px;}
 .rpt-card.rpt-highlight{background:#0d3d26;border-color:#0d3d26;}
-.rpt-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#9ca3af;margin-bottom:4px;}
+.rpt-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;margin-bottom:2px;}
 .rpt-card.rpt-highlight .rpt-label{color:rgba(255,255,255,0.55);}
-.rpt-value{font-size:14px;font-weight:700;color:#1a1a2e;}
+.rpt-value{font-size:12px;font-weight:700;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rpt-card.rpt-highlight .rpt-value{color:white;}
 
 @media(max-width:900px){
