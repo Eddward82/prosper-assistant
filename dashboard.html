@@ -128,27 +128,30 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .start-btn{width:100%;padding:14px;background:#0d3d26;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;margin-top:6px;transition:background 0.15s;}
 .start-btn:hover{background:#16a34a;}
 
-/* CHAT INVOICE CARDS */
-.chat-invoice-list{display:flex;flex-direction:column;gap:5px;margin-top:4px;}
-.chat-invoice-card{background:white;border:1px solid #e8eaed;border-radius:8px;padding:7px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
-.chat-invoice-card:hover{border-color:#d1d5db;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
-.cic-left{display:flex;flex-direction:column;gap:1px;min-width:0;}
-.cic-num{font-size:9px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;}
-.cic-name{font-size:12px;font-weight:600;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.cic-right{display:flex;align-items:center;gap:6px;flex-shrink:0;}
-.cic-amount{font-size:12px;font-weight:700;color:#d97706;}
-.cic-pay-btn{font-size:10px;font-weight:600;color:#0d3d26;background:#dcfce7;border:1px solid #bbf7d0;border-radius:5px;padding:2px 7px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all 0.15s;}
-.cic-pay-btn:hover{background:#0d3d26;color:white;border-color:#0d3d26;}
-.chat-summary{font-size:11px;color:#6b7280;margin-bottom:4px;}
+/* CHAT FORMATTED TEXT */
+.chat-report{font-size:13px;line-height:1.7;color:#1a1a2e;}
+.chat-report .rpt-title{font-weight:700;font-size:13px;color:#0d3d26;margin-bottom:4px;}
+.chat-report .rpt-row{color:#374151;}
+.chat-report .rpt-row b{color:#1a1a2e;}
+.chat-report .rpt-amount{font-weight:700;color:#1a1a2e;}
+.chat-report .rpt-warn{font-weight:700;color:#d97706;}
+.chat-report .rpt-neg{font-weight:700;color:#dc2626;}
+.chat-report .rpt-divider{border:none;border-top:1px solid #f1f3f4;margin:6px 0;}
 
-/* REPORT STAT CARDS IN CHAT */
-.rpt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:5px;}
-.rpt-card{background:#f8fafc;border:1px solid #e8eaed;border-radius:7px;padding:6px 9px;}
-.rpt-card.rpt-highlight{background:#0d3d26;border-color:#0d3d26;}
-.rpt-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;margin-bottom:2px;}
-.rpt-card.rpt-highlight .rpt-label{color:rgba(255,255,255,0.55);}
-.rpt-value{font-size:12px;font-weight:700;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.rpt-card.rpt-highlight .rpt-value{color:white;}
+/* INVOICE TABLE */
+.inv-table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;}
+.inv-table thead tr{border-bottom:2px solid #e8eaed;}
+.inv-table th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;padding:4px 8px 6px;}
+.inv-table th:last-child{text-align:right;}
+.inv-table td{padding:7px 8px;border-bottom:1px solid #f3f4f6;vertical-align:middle;}
+.inv-table tr:last-child td{border-bottom:none;}
+.inv-table tr:hover td{background:#fafbfc;}
+.inv-num{font-size:10px;font-weight:700;color:#6b7280;}
+.inv-name{font-size:13px;font-weight:600;color:#1a1a2e;}
+.inv-amt{font-weight:700;color:#d97706;text-align:right;white-space:nowrap;}
+.inv-pay-btn{font-size:10px;font-weight:600;color:#0d3d26;background:#dcfce7;border:1px solid #bbf7d0;border-radius:5px;padding:3px 8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all 0.15s;white-space:nowrap;}
+.inv-pay-btn:hover{background:#0d3d26;color:white;border-color:#0d3d26;}
+.chat-summary{font-size:11px;color:#6b7280;margin-bottom:4px;}
 
 @media(max-width:900px){
 .sidebar{display:none;}
@@ -390,115 +393,87 @@ function fmtNGN(raw) {
   return "NGN " + Math.round(n).toLocaleString();
 }
 
-// Replace all "NGN 12,345.0" patterns in any string
 function cleanAmounts(text) {
   return text.replace(/NGN\s*([\d,]+)\.0+\b/g, (_, num) => "NGN " + num);
 }
 
-function statCard(label, value, highlight) {
-  return `<div class="rpt-card${highlight ? " rpt-highlight" : ""}">
-    <div class="rpt-label">${label}</div>
-    <div class="rpt-value">${value}</div>
-  </div>`;
-}
-
 function renderResponse(text) {
-  // ── Unpaid invoice list ──────────────────────────────────────────
+  // ── Unpaid invoice list → compact table ─────────────────────────
   const invoiceListMatch = text.match(/Found (\d+) unpaid invoice[s]?:\n([\s\S]+)/);
   if (invoiceListMatch) {
     const count = invoiceListMatch[1];
     const lines = invoiceListMatch[2].trim().split("\n");
-    const cards = lines.map(line => {
+    const rows = lines.map(line => {
       const parts = line.replace(/^-\s*/, "").split("|").map(s => s.trim());
       if (parts.length < 3) return "";
       const [invNum, name, amountRaw] = parts;
       const amount = fmtNGN(amountRaw.replace("NGN", "").trim());
-      return `<div class="chat-invoice-card">
-        <div class="cic-left">
-          <span class="cic-num">${invNum}</span>
-          <span class="cic-name">${name}</span>
-        </div>
-        <div class="cic-right">
-          <span class="cic-amount">${amount}</span>
-          <button class="cic-pay-btn" onclick="quick('Mark ${invNum} as paid')">Mark Paid</button>
-        </div>
-      </div>`;
+      return `<tr>
+        <td><div class="inv-num">${invNum}</div><div class="inv-name">${name}</div></td>
+        <td class="inv-amt">${amount}</td>
+        <td style="text-align:right"><button class="inv-pay-btn" onclick="quick('Mark ${invNum} as paid')">Mark Paid</button></td>
+      </tr>`;
     }).join("");
     return `<div class="msg bot">
-      <div class="chat-summary">Found <strong>${count}</strong> unpaid invoice${count > 1 ? "s" : ""}:</div>
-      <div class="chat-invoice-list">${cards}</div>
+      <div class="chat-summary">Found <strong>${count}</strong> unpaid invoice${count > 1 ? "s" : ""}</div>
+      <table class="inv-table">
+        <thead><tr><th>Customer</th><th>Amount</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>`;
   }
 
-  // ── Today's report ───────────────────────────────────────────────
-  // "Today (2026-05-16): 6 sales, NGN 387,050 revenue, NGN -27,850 profit. 5 unpaid invoices = NGN 1,225,000 outstanding"
+  // ── Today's report → formatted text ─────────────────────────────
   const todayMatch = text.match(/Today[^:]*:\s*(\d+) sales?,\s*NGN ([\d,.-]+) revenue,\s*NGN ([\d,.-]+) profit\.\s*(\d+) unpaid.*?NGN ([\d,.-]+) outstanding/i);
   if (todayMatch) {
     const [, sales, rev, profit, unpaidCount, outstanding] = todayMatch;
     const profitNum = parseFloat(profit.replace(/,/g, ""));
+    const profitClass = profitNum < 0 ? "rpt-neg" : "rpt-amount";
     const profitFmt = (profitNum < 0 ? "-NGN " : "NGN ") + Math.abs(Math.round(profitNum)).toLocaleString();
-    return `<div class="msg bot">
-      <div class="chat-summary">Today's snapshot</div>
-      <div class="rpt-grid">
-        ${statCard("Sales", sales, false)}
-        ${statCard("Revenue", "NGN " + Math.round(parseFloat(rev.replace(/,/g,""))).toLocaleString(), true)}
-        ${statCard("Profit", profitFmt, profitNum >= 0)}
-        ${statCard("Outstanding", "NGN " + Math.round(parseFloat(outstanding.replace(/,/g,""))).toLocaleString(), false)}
-        ${statCard("Unpaid Invoices", unpaidCount, false)}
-      </div>
-    </div>`;
+    return `<div class="msg bot"><div class="chat-report">
+      <div class="rpt-title">Today's Report</div>
+      <div class="rpt-row"><b>${sales}</b> sales &nbsp;·&nbsp; Revenue: <span class="rpt-amount">NGN ${Math.round(parseFloat(rev.replace(/,/g,""))).toLocaleString()}</span> &nbsp;·&nbsp; Profit: <span class="${profitClass}">${profitFmt}</span></div>
+      <hr class="rpt-divider">
+      <div class="rpt-row"><b>${unpaidCount}</b> unpaid invoices &nbsp;·&nbsp; Outstanding: <span class="rpt-warn">NGN ${Math.round(parseFloat(outstanding.replace(/,/g,""))).toLocaleString()}</span></div>
+    </div></div>`;
   }
 
-  // ── Lifetime / all-time report ───────────────────────────────────
-  // "LIFETIME REPORT:\nSALES: ... | Revenue NGN ... | Profit NGN ...\nINVOICES: ... | Paid NGN ... | Outstanding NGN ...\nCUSTOMERS: ..."
+  // ── Lifetime report → formatted text ────────────────────────────
   if (text.includes("LIFETIME REPORT")) {
-    const salesM  = text.match(/(\d+) transactions.*?Revenue NGN ([\d,.-]+).*?Profit NGN ([\d,.-]+)/i);
-    const invM    = text.match(/(\d+) issued.*?Paid NGN ([\d,.-]+).*?Outstanding NGN ([\d,.-]+)/i);
-    const custM   = text.match(/CUSTOMERS:\s*(\d+)/i);
+    const salesM = text.match(/(\d+) transactions.*?Revenue NGN ([\d,.-]+).*?Profit NGN ([\d,.-]+)/i);
+    const invM   = text.match(/(\d+) issued.*?Paid NGN ([\d,.-]+).*?Outstanding NGN ([\d,.-]+)/i);
+    const custM  = text.match(/CUSTOMERS:\s*(\d+)/i);
     if (salesM && invM && custM) {
-      return `<div class="msg bot">
-        <div class="chat-summary">Lifetime report</div>
-        <div class="rpt-grid">
-          ${statCard("Total Sales", salesM[1], false)}
-          ${statCard("Revenue", "NGN " + Math.round(parseFloat(salesM[2].replace(/,/g,""))).toLocaleString(), true)}
-          ${statCard("Profit", "NGN " + Math.round(parseFloat(salesM[3].replace(/,/g,""))).toLocaleString(), true)}
-          ${statCard("Invoiced", invM[1] + " invoices", false)}
-          ${statCard("Paid", "NGN " + Math.round(parseFloat(invM[2].replace(/,/g,""))).toLocaleString(), false)}
-          ${statCard("Outstanding", "NGN " + Math.round(parseFloat(invM[3].replace(/,/g,""))).toLocaleString(), false)}
-          ${statCard("Customers", custM[1], false)}
-        </div>
-      </div>`;
+      return `<div class="msg bot"><div class="chat-report">
+        <div class="rpt-title">Lifetime Report</div>
+        <div class="rpt-row"><b>${salesM[1]}</b> sales &nbsp;·&nbsp; Revenue: <span class="rpt-amount">NGN ${Math.round(parseFloat(salesM[2].replace(/,/g,""))).toLocaleString()}</span> &nbsp;·&nbsp; Profit: <span class="rpt-amount">NGN ${Math.round(parseFloat(salesM[3].replace(/,/g,""))).toLocaleString()}</span></div>
+        <hr class="rpt-divider">
+        <div class="rpt-row"><b>${invM[1]}</b> invoices issued &nbsp;·&nbsp; Paid: <span class="rpt-amount">NGN ${Math.round(parseFloat(invM[2].replace(/,/g,""))).toLocaleString()}</span> &nbsp;·&nbsp; Outstanding: <span class="rpt-warn">NGN ${Math.round(parseFloat(invM[3].replace(/,/g,""))).toLocaleString()}</span></div>
+        <hr class="rpt-divider">
+        <div class="rpt-row"><b>${custM[1]}</b> customers total</div>
+      </div></div>`;
     }
   }
 
-  // ── All-time sales summary ───────────────────────────────────────
-  // "All-time: 12 sales, NGN 500,000 revenue, NGN 200,000 profit"
+  // ── All-time sales summary → formatted text ──────────────────────
   const allSalesM = text.match(/All-time:\s*(\d+) sales?,\s*NGN ([\d,.-]+) revenue,\s*NGN ([\d,.-]+) profit/i);
   if (allSalesM) {
-    return `<div class="msg bot">
-      <div class="chat-summary">All-time sales summary</div>
-      <div class="rpt-grid">
-        ${statCard("Total Sales", allSalesM[1], false)}
-        ${statCard("Revenue", "NGN " + Math.round(parseFloat(allSalesM[2].replace(/,/g,""))).toLocaleString(), true)}
-        ${statCard("Profit", "NGN " + Math.round(parseFloat(allSalesM[3].replace(/,/g,""))).toLocaleString(), true)}
-      </div>
-    </div>`;
+    return `<div class="msg bot"><div class="chat-report">
+      <div class="rpt-title">All-Time Sales</div>
+      <div class="rpt-row"><b>${allSalesM[1]}</b> sales &nbsp;·&nbsp; Revenue: <span class="rpt-amount">NGN ${Math.round(parseFloat(allSalesM[2].replace(/,/g,""))).toLocaleString()}</span> &nbsp;·&nbsp; Profit: <span class="rpt-amount">NGN ${Math.round(parseFloat(allSalesM[3].replace(/,/g,""))).toLocaleString()}</span></div>
+    </div></div>`;
   }
 
-  // ── Sale recorded ────────────────────────────────────────────────
-  // "Sale recorded! 10 biscuits | Revenue: NGN 5,000 | Profit: NGN 2,000"
+  // ── Sale recorded → formatted text ──────────────────────────────
   const saleM = text.match(/Sale recorded!?\s+(.+?)\s*\|\s*Revenue:\s*NGN ([\d,.-]+)\s*\|\s*Profit:\s*NGN ([\d,.-]+)/i);
   if (saleM) {
-    return `<div class="msg bot">
-      <div class="chat-summary">✓ Sale recorded — ${saleM[1]}</div>
-      <div class="rpt-grid">
-        ${statCard("Revenue", "NGN " + Math.round(parseFloat(saleM[2].replace(/,/g,""))).toLocaleString(), true)}
-        ${statCard("Profit", "NGN " + Math.round(parseFloat(saleM[3].replace(/,/g,""))).toLocaleString(), true)}
-      </div>
-    </div>`;
+    return `<div class="msg bot"><div class="chat-report">
+      <div class="rpt-title">✓ Sale Recorded</div>
+      <div class="rpt-row">${saleM[1]} &nbsp;·&nbsp; Revenue: <span class="rpt-amount">NGN ${Math.round(parseFloat(saleM[2].replace(/,/g,""))).toLocaleString()}</span> &nbsp;·&nbsp; Profit: <span class="rpt-amount">NGN ${Math.round(parseFloat(saleM[3].replace(/,/g,""))).toLocaleString()}</span></div>
+    </div></div>`;
   }
 
-  // ── Default: clean .0 from amounts and show plain bubble ─────────
+  // ── Default: plain bubble with .0 cleaned ───────────────────────
   return `<div class="msg bot">${cleanAmounts(text)}</div>`;
 }
 
