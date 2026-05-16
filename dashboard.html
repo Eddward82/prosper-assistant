@@ -128,6 +128,19 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .start-btn{width:100%;padding:14px;background:#0d3d26;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;margin-top:6px;transition:background 0.15s;}
 .start-btn:hover{background:#16a34a;}
 
+/* CHAT INVOICE CARDS */
+.chat-invoice-list{display:flex;flex-direction:column;gap:8px;margin-top:4px;}
+.chat-invoice-card{background:white;border:1px solid #e8eaed;border-radius:10px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.chat-invoice-card:hover{border-color:#d1d5db;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+.cic-left{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.cic-num{font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;}
+.cic-name{font-size:13px;font-weight:600;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cic-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
+.cic-amount{font-size:13px;font-weight:700;color:#d97706;}
+.cic-pay-btn{font-size:11px;font-weight:600;color:#0d3d26;background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;padding:3px 8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all 0.15s;}
+.cic-pay-btn:hover{background:#0d3d26;color:white;border-color:#0d3d26;}
+.chat-summary{font-size:12px;color:#6b7280;margin-bottom:6px;}
+
 @media(max-width:900px){
 .sidebar{display:none;}
 .content{grid-template-columns:1fr;padding:16px;}
@@ -362,6 +375,45 @@ async function loadDash() {
   } catch (e) { console.error(e); }
 }
 
+function fmtAmount(raw) {
+  // Remove trailing .0 or .00, then format with commas
+  const n = parseFloat(raw.replace(/,/g, ""));
+  return "NGN " + (Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString());
+}
+
+function renderResponse(text) {
+  // Detect invoice list: starts with "Found X unpaid invoice"
+  const invoiceListMatch = text.match(/Found (\d+) unpaid invoice[s]?:\n([\s\S]+)/);
+  if (invoiceListMatch) {
+    const count = invoiceListMatch[1];
+    const lines = invoiceListMatch[2].trim().split("\n");
+    const cards = lines.map(line => {
+      // Format: "- INV-003 | Adebayo | NGN 75,000.0"
+      const parts = line.replace(/^-\s*/, "").split("|").map(s => s.trim());
+      if (parts.length < 3) return `<div class="chat-summary">${line}</div>`;
+      const [invNum, name, amountRaw] = parts;
+      const amount = fmtAmount(amountRaw.replace("NGN", "").trim());
+      return `
+        <div class="chat-invoice-card">
+          <div class="cic-left">
+            <span class="cic-num">${invNum}</span>
+            <span class="cic-name">${name}</span>
+          </div>
+          <div class="cic-right">
+            <span class="cic-amount">${amount}</span>
+            <button class="cic-pay-btn" onclick="quick('Mark ${invNum} as paid')">Mark Paid</button>
+          </div>
+        </div>`;
+    }).join("");
+    return `<div class="msg bot">
+      <div class="chat-summary">Found <strong>${count}</strong> unpaid invoice${count > 1 ? "s" : ""}:</div>
+      <div class="chat-invoice-list">${cards}</div>
+    </div>`;
+  }
+  // Default: plain text bubble
+  return `<div class="msg bot">${text}</div>`;
+}
+
 async function send() {
   const i = document.getElementById("input");
   const t = i.value.trim();
@@ -380,7 +432,7 @@ async function send() {
     });
     const d = await r.json();
     document.getElementById("ld").remove();
-    m.innerHTML += `<div class="msg bot">${d.response}</div>`;
+    m.insertAdjacentHTML("beforeend", renderResponse(d.response));
     m.scrollTop = m.scrollHeight;
     loadDash();
   } catch (e) { document.getElementById("ld").remove(); }
