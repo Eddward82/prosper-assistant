@@ -111,6 +111,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .invoice-left{display:flex;flex-direction:column;gap:2px;}
 .invoice-num{font-size:11px;font-weight:600;color:#6b7280;}
 .invoice-name{font-size:13px;font-weight:500;color:#1a1a2e;}
+.invoice-phone{font-size:11px;color:#9ca3af;margin-top:1px;}
 .invoice-amount{font-size:13px;font-weight:700;color:#1a1a2e;}
 .unpaid-badge{font-size:10px;font-weight:600;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:2px 7px;border-radius:8px;margin-top:2px;display:inline-block;}
 
@@ -380,6 +381,7 @@ async function loadDash() {
         <div class="invoice-left">
           <span class="invoice-num">${i.invoice_number}</span>
           <span class="invoice-name">${i.customer_name}</span>
+          ${i.customer_phone ? `<span class="invoice-phone">${i.customer_phone}</span>` : ""}
           <span class="unpaid-badge">Unpaid</span>
         </div>
         <span class="invoice-amount">NGN ${i.amount.toLocaleString()}</span>
