@@ -172,6 +172,40 @@ async def dashboard_data(request: Request):
         } for inv in unpaid[:5]]
     })
 
+async def register_business_endpoint(request: Request):
+    import json
+    body = await request.body()
+    data = json.loads(body)
+    business_name = data.get("bizName", "").strip()
+    owner_name = data.get("ownerName", "").strip()
+    business_email = data.get("bizEmail", "").strip()
+    
+    if not business_name or not owner_name or not business_email:
+        return JSONResponse({"error": "Missing required fields"}, status_code=400)
+    
+    business_id = business_name.lower().replace(" ", "-")
+    
+    from pymongo import MongoClient
+    from datetime import datetime
+    client = MongoClient(os.getenv("MONGODB_URI"))
+    db = client[os.getenv("DB_NAME")]
+    
+    existing = db["businesses"].find_one({"business_id": business_id})
+    if not existing:
+        db["businesses"].insert_one({
+            "business_id": business_id,
+            "business_name": business_name,
+            "owner_name": owner_name,
+            "business_email": business_email,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        return JSONResponse({"status": "registered", "business_id": business_id})
+    else:
+        db["businesses"].update_one(
+            {"business_id": business_id},
+            {"$set": {"owner_name": owner_name, "business_email": business_email}}
+        )
+        return JSONResponse({"status": "updated", "business_id": business_id})
 async def chat_endpoint(request: Request):
     import json
     body = await request.body()
@@ -390,6 +424,7 @@ async def chat_endpoint(request: Request):
     return JSONResponse({"response": result})
 
 app = mcp.http_app()
+app.routes.append(Route("/api/register", register_business_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/dashboard", dashboard_data, methods=["GET"]))
 app.routes.append(Route("/api/chat", chat_endpoint, methods=["POST", "OPTIONS"]))
 app.add_middleware(
