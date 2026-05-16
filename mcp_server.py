@@ -126,7 +126,7 @@ def mark_invoice_as_paid(invoice_number: str, business_id: str = "default") -> s
     if invoice.get("status") == "paid":
         return f"Invoice {invoice_number} is already paid"
     db["invoice"].update_one(
-        {"invoice_number": invoice_number},
+    	{"invoice_number": invoice_number, "business_id": business_id},
         {"$set": {"status": "paid", "date_paid": datetime.now().strftime("%Y-%m-%d")}}
     )
     db["customers"].update_one(
