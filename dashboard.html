@@ -141,6 +141,15 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .cic-pay-btn:hover{background:#0d3d26;color:white;border-color:#0d3d26;}
 .chat-summary{font-size:12px;color:#6b7280;margin-bottom:6px;}
 
+/* REPORT STAT CARDS IN CHAT */
+.rpt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;}
+.rpt-card{background:#f8fafc;border:1px solid #e8eaed;border-radius:8px;padding:10px 12px;}
+.rpt-card.rpt-highlight{background:#0d3d26;border-color:#0d3d26;}
+.rpt-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#9ca3af;margin-bottom:4px;}
+.rpt-card.rpt-highlight .rpt-label{color:rgba(255,255,255,0.55);}
+.rpt-value{font-size:14px;font-weight:700;color:#1a1a2e;}
+.rpt-card.rpt-highlight .rpt-value{color:white;}
+
 @media(max-width:900px){
 .sidebar{display:none;}
 .content{grid-template-columns:1fr;padding:16px;}
@@ -375,43 +384,122 @@ async function loadDash() {
   } catch (e) { console.error(e); }
 }
 
-function fmtAmount(raw) {
-  // Remove trailing .0 or .00, then format with commas
-  const n = parseFloat(raw.replace(/,/g, ""));
-  return "NGN " + (Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString());
+function fmtNGN(raw) {
+  const n = parseFloat(String(raw).replace(/,/g, ""));
+  if (isNaN(n)) return raw;
+  return "NGN " + Math.round(n).toLocaleString();
+}
+
+// Replace all "NGN 12,345.0" patterns in any string
+function cleanAmounts(text) {
+  return text.replace(/NGN\s*([\d,]+)\.0+\b/g, (_, num) => "NGN " + num);
+}
+
+function statCard(label, value, highlight) {
+  return `<div class="rpt-card${highlight ? " rpt-highlight" : ""}">
+    <div class="rpt-label">${label}</div>
+    <div class="rpt-value">${value}</div>
+  </div>`;
 }
 
 function renderResponse(text) {
-  // Detect invoice list: starts with "Found X unpaid invoice"
+  // ── Unpaid invoice list ──────────────────────────────────────────
   const invoiceListMatch = text.match(/Found (\d+) unpaid invoice[s]?:\n([\s\S]+)/);
   if (invoiceListMatch) {
     const count = invoiceListMatch[1];
     const lines = invoiceListMatch[2].trim().split("\n");
     const cards = lines.map(line => {
-      // Format: "- INV-003 | Adebayo | NGN 75,000.0"
       const parts = line.replace(/^-\s*/, "").split("|").map(s => s.trim());
-      if (parts.length < 3) return `<div class="chat-summary">${line}</div>`;
+      if (parts.length < 3) return "";
       const [invNum, name, amountRaw] = parts;
-      const amount = fmtAmount(amountRaw.replace("NGN", "").trim());
-      return `
-        <div class="chat-invoice-card">
-          <div class="cic-left">
-            <span class="cic-num">${invNum}</span>
-            <span class="cic-name">${name}</span>
-          </div>
-          <div class="cic-right">
-            <span class="cic-amount">${amount}</span>
-            <button class="cic-pay-btn" onclick="quick('Mark ${invNum} as paid')">Mark Paid</button>
-          </div>
-        </div>`;
+      const amount = fmtNGN(amountRaw.replace("NGN", "").trim());
+      return `<div class="chat-invoice-card">
+        <div class="cic-left">
+          <span class="cic-num">${invNum}</span>
+          <span class="cic-name">${name}</span>
+        </div>
+        <div class="cic-right">
+          <span class="cic-amount">${amount}</span>
+          <button class="cic-pay-btn" onclick="quick('Mark ${invNum} as paid')">Mark Paid</button>
+        </div>
+      </div>`;
     }).join("");
     return `<div class="msg bot">
       <div class="chat-summary">Found <strong>${count}</strong> unpaid invoice${count > 1 ? "s" : ""}:</div>
       <div class="chat-invoice-list">${cards}</div>
     </div>`;
   }
-  // Default: plain text bubble
-  return `<div class="msg bot">${text}</div>`;
+
+  // ── Today's report ───────────────────────────────────────────────
+  // "Today (2026-05-16): 6 sales, NGN 387,050 revenue, NGN -27,850 profit. 5 unpaid invoices = NGN 1,225,000 outstanding"
+  const todayMatch = text.match(/Today[^:]*:\s*(\d+) sales?,\s*NGN ([\d,.-]+) revenue,\s*NGN ([\d,.-]+) profit\.\s*(\d+) unpaid.*?NGN ([\d,.-]+) outstanding/i);
+  if (todayMatch) {
+    const [, sales, rev, profit, unpaidCount, outstanding] = todayMatch;
+    const profitNum = parseFloat(profit.replace(/,/g, ""));
+    const profitFmt = (profitNum < 0 ? "-NGN " : "NGN ") + Math.abs(Math.round(profitNum)).toLocaleString();
+    return `<div class="msg bot">
+      <div class="chat-summary">Today's snapshot</div>
+      <div class="rpt-grid">
+        ${statCard("Sales", sales, false)}
+        ${statCard("Revenue", "NGN " + Math.round(parseFloat(rev.replace(/,/g,""))).toLocaleString(), true)}
+        ${statCard("Profit", profitFmt, profitNum >= 0)}
+        ${statCard("Outstanding", "NGN " + Math.round(parseFloat(outstanding.replace(/,/g,""))).toLocaleString(), false)}
+        ${statCard("Unpaid Invoices", unpaidCount, false)}
+      </div>
+    </div>`;
+  }
+
+  // ── Lifetime / all-time report ───────────────────────────────────
+  // "LIFETIME REPORT:\nSALES: ... | Revenue NGN ... | Profit NGN ...\nINVOICES: ... | Paid NGN ... | Outstanding NGN ...\nCUSTOMERS: ..."
+  if (text.includes("LIFETIME REPORT")) {
+    const salesM  = text.match(/(\d+) transactions.*?Revenue NGN ([\d,.-]+).*?Profit NGN ([\d,.-]+)/i);
+    const invM    = text.match(/(\d+) issued.*?Paid NGN ([\d,.-]+).*?Outstanding NGN ([\d,.-]+)/i);
+    const custM   = text.match(/CUSTOMERS:\s*(\d+)/i);
+    if (salesM && invM && custM) {
+      return `<div class="msg bot">
+        <div class="chat-summary">Lifetime report</div>
+        <div class="rpt-grid">
+          ${statCard("Total Sales", salesM[1], false)}
+          ${statCard("Revenue", "NGN " + Math.round(parseFloat(salesM[2].replace(/,/g,""))).toLocaleString(), true)}
+          ${statCard("Profit", "NGN " + Math.round(parseFloat(salesM[3].replace(/,/g,""))).toLocaleString(), true)}
+          ${statCard("Invoiced", invM[1] + " invoices", false)}
+          ${statCard("Paid", "NGN " + Math.round(parseFloat(invM[2].replace(/,/g,""))).toLocaleString(), false)}
+          ${statCard("Outstanding", "NGN " + Math.round(parseFloat(invM[3].replace(/,/g,""))).toLocaleString(), false)}
+          ${statCard("Customers", custM[1], false)}
+        </div>
+      </div>`;
+    }
+  }
+
+  // ── All-time sales summary ───────────────────────────────────────
+  // "All-time: 12 sales, NGN 500,000 revenue, NGN 200,000 profit"
+  const allSalesM = text.match(/All-time:\s*(\d+) sales?,\s*NGN ([\d,.-]+) revenue,\s*NGN ([\d,.-]+) profit/i);
+  if (allSalesM) {
+    return `<div class="msg bot">
+      <div class="chat-summary">All-time sales summary</div>
+      <div class="rpt-grid">
+        ${statCard("Total Sales", allSalesM[1], false)}
+        ${statCard("Revenue", "NGN " + Math.round(parseFloat(allSalesM[2].replace(/,/g,""))).toLocaleString(), true)}
+        ${statCard("Profit", "NGN " + Math.round(parseFloat(allSalesM[3].replace(/,/g,""))).toLocaleString(), true)}
+      </div>
+    </div>`;
+  }
+
+  // ── Sale recorded ────────────────────────────────────────────────
+  // "Sale recorded! 10 biscuits | Revenue: NGN 5,000 | Profit: NGN 2,000"
+  const saleM = text.match(/Sale recorded!?\s+(.+?)\s*\|\s*Revenue:\s*NGN ([\d,.-]+)\s*\|\s*Profit:\s*NGN ([\d,.-]+)/i);
+  if (saleM) {
+    return `<div class="msg bot">
+      <div class="chat-summary">✓ Sale recorded — ${saleM[1]}</div>
+      <div class="rpt-grid">
+        ${statCard("Revenue", "NGN " + Math.round(parseFloat(saleM[2].replace(/,/g,""))).toLocaleString(), true)}
+        ${statCard("Profit", "NGN " + Math.round(parseFloat(saleM[3].replace(/,/g,""))).toLocaleString(), true)}
+      </div>
+    </div>`;
+  }
+
+  // ── Default: clean .0 from amounts and show plain bubble ─────────
+  return `<div class="msg bot">${cleanAmounts(text)}</div>`;
 }
 
 async function send() {
