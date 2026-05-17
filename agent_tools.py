@@ -144,7 +144,7 @@ def update_customer_phone(customer_name, customer_phone, business_id="default"):
         {"customer_name": customer_name, "business_id": business_id},
         {"$set": {"customer_phone": customer_phone}}
     )
-    return result.modified_count
+    return result.matched_count
 
 
 # ── 6. EMAIL HELPERS ────────────────────────────────
