@@ -194,6 +194,8 @@ async def dashboard_data(request: Request):
             "invoice_number": inv["invoice_number"],
             "customer_name": inv["customer_name"],
             "customer_phone": inv.get("customer_phone", ""),
+            "customer_email": inv.get("customer_email", ""),
+            "description": inv["items"][0]["description"] if inv.get("items") else "Goods / Services",
             "amount": inv["total_amount"]
         } for inv in unpaid]
     })
