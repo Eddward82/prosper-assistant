@@ -195,7 +195,7 @@ async def dashboard_data(request: Request):
             "customer_name": inv["customer_name"],
             "customer_phone": inv.get("customer_phone", ""),
             "amount": inv["total_amount"]
-        } for inv in unpaid[:5]]
+        } for inv in unpaid]
     })
 
 
