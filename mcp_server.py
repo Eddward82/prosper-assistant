@@ -275,15 +275,15 @@ async def chat_endpoint(request: Request):
             result = "Please include the email address. Example: 'Bayo's email is bayo@gmail.com'"
         else:
             customer_email = email_match.group(0)
-            name_match = re.search(r"([A-Z][a-zA-Z]+)['s]*\s+email", user_message)
+            name_match = re.search(r"([A-Za-z]+)['s]*\s+email", user_message, re.IGNORECASE)
             if not name_match:
-                name_match = re.search(r"([A-Z][a-zA-Z]+)\s+(?:\+?[\d]+\s+)?email", user_message)
+                name_match = re.search(r"([A-Za-z]+)\s+(?:\+?[\d]+\s+)?email", user_message, re.IGNORECASE)
             if not name_match:
-                name_match = re.search(r"(?:for|to|of)\s+([A-Z][a-zA-Z]+)", user_message)
+                name_match = re.search(r"(?:for|to|of)\s+([A-Za-z]+)", user_message, re.IGNORECASE)
             if not name_match:
                 result = "Please mention the customer's name. Example: 'Bayo's email is bayo@gmail.com'"
             else:
-                customer_name = name_match.group(1)
+                customer_name = name_match.group(1).capitalize()
                 phone_in_msg = _extract_phone(user_message)
                 cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "")
                 if ambiguous:
@@ -310,13 +310,13 @@ async def chat_endpoint(request: Request):
         if not phone:
             result = "Please include the phone number. Example: 'Bayo's phone is 08012345678'"
         else:
-            name_match = re.search(r"([A-Z][a-zA-Z]+)['s]*\s+phone", user_message)
+            name_match = re.search(r"([A-Za-z]+)['s]*\s+phone", user_message, re.IGNORECASE)
             if not name_match:
-                name_match = re.search(r"(?:for|to|of)\s+([A-Z][a-zA-Z]+)", user_message)
+                name_match = re.search(r"(?:for|to|of)\s+([A-Za-z]+)", user_message, re.IGNORECASE)
             if not name_match:
                 result = "Please mention the customer's name. Example: 'Bayo's phone is 08012345678'"
             else:
-                customer_name = name_match.group(1)
+                customer_name = name_match.group(1).capitalize()
                 result = set_customer_phone(customer_name, phone, business_id)
 
     elif ("credit sale" in msg_lower) or ("on credit" in msg_lower):
@@ -324,16 +324,16 @@ async def chat_endpoint(request: Request):
         numbers = [float(n) for n in numbers]
         amount = numbers[-1] if numbers else 0
 
-        name_match = re.search(r'(?:to|for|,)\s+([A-Z][a-zA-Z]+)\s+(?:took|bought|owes|at|for|worth)', user_message)
+        name_match = re.search(r'(?:to|for|,)\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth)', user_message, re.IGNORECASE)
         if not name_match:
-            name_match = re.search(r'to\s+([A-Z][a-zA-Z]+)', user_message)
+            name_match = re.search(r'to\s+([A-Za-z]+)', user_message, re.IGNORECASE)
         if not name_match:
-            name_match = re.search(r'(?:^|\s)([A-Z][a-zA-Z]+)\s+(?:took|bought|owes)', user_message)
+            name_match = re.search(r'(?:^|\s)([A-Za-z]+)\s+(?:took|bought|owes)', user_message, re.IGNORECASE)
 
         if not name_match:
             result = "I couldn't find the customer's name. Try: 'Credit sale to Chidi for 50000'"
         else:
-            customer_name = name_match.group(1)
+            customer_name = name_match.group(1).capitalize()
             phone_in_msg = _extract_phone(user_message)
             email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
             customer_email = email_match.group(0) if email_match else None
@@ -410,16 +410,16 @@ async def chat_endpoint(request: Request):
         if amount == 0:
             result = "Please include an amount. Try: 'Send invoice to Chidi at chidi@gmail.com for 50000'"
         else:
-            name_match = re.search(r'(?:to|for|,)\s+([A-Z][a-zA-Z]+)\s+(?:took|bought|owes|at|for|worth)', user_message)
+            name_match = re.search(r'(?:to|for|,)\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth)', user_message, re.IGNORECASE)
             if not name_match:
-                name_match = re.search(r'to\s+([A-Z][a-zA-Z]+)', user_message)
+                name_match = re.search(r'to\s+([A-Za-z]+)', user_message, re.IGNORECASE)
             if not name_match:
-                name_match = re.search(r'(?:^|\s)([A-Z][a-zA-Z]+)\s+(?:took|bought|owes)', user_message)
+                name_match = re.search(r'(?:^|\s)([A-Za-z]+)\s+(?:took|bought|owes)', user_message, re.IGNORECASE)
 
             if not name_match:
                 result = "I couldn't find the customer's name. Try: 'Send invoice to Chidi for 50000'"
             else:
-                customer_name = name_match.group(1)
+                customer_name = name_match.group(1).capitalize()
                 phone_in_msg = _extract_phone(user_message)
                 email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
                 customer_email = email_match.group(0) if email_match else None
