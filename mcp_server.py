@@ -277,17 +277,26 @@ async def chat_endpoint(request: Request):
             customer_email = email_match.group(0)
             name_match = re.search(r"([A-Z][a-zA-Z]+)['s]*\s+email", user_message)
             if not name_match:
+                name_match = re.search(r"([A-Z][a-zA-Z]+)\s+(?:\+?[\d]+\s+)?email", user_message)
+            if not name_match:
                 name_match = re.search(r"(?:for|to|of)\s+([A-Z][a-zA-Z]+)", user_message)
             if not name_match:
                 result = "Please mention the customer's name. Example: 'Bayo's email is bayo@gmail.com'"
             else:
                 customer_name = name_match.group(1)
-                existing = db["customers"].find_one({"customer_name": customer_name, "business_id": business_id})
-                if not existing:
+                phone_in_msg = _extract_phone(user_message)
+                cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "")
+                if ambiguous:
+                    options = "\n".join(
+                        f"  - {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
+                        for m in matches
+                    )
+                    result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nInclude their phone number to specify. Example: '{customer_name} 08012345678 email is {customer_email}'"
+                elif not cust_doc:
                     result = f"I don't have {customer_name} in your customer list. Create an invoice for them first."
                 else:
                     db["customers"].update_one(
-                        {"customer_name": customer_name, "business_id": business_id},
+                        {"_id": cust_doc["_id"]} if "_id" in cust_doc else {"customer_name": customer_name, "business_id": business_id},
                         {"$set": {"customer_email": customer_email}}
                     )
                     db["invoice"].update_many(
