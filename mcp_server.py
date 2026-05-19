@@ -326,7 +326,7 @@ async def chat_endpoint(request: Request):
         numbers = [float(n) for n in numbers]
         amount = numbers[-1] if numbers else 0
 
-        name_match = re.search(r'(?:to|for|,)\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth)', user_message, re.IGNORECASE)
+        name_match = re.search(r'to\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth|\+?[\d])', user_message, re.IGNORECASE)
         if not name_match:
             name_match = re.search(r'to\s+([A-Za-z]+)', user_message, re.IGNORECASE)
         if not name_match:
@@ -412,7 +412,7 @@ async def chat_endpoint(request: Request):
         if amount == 0:
             result = "Please include an amount. Try: 'Send invoice to Chidi at chidi@gmail.com for 50000'"
         else:
-            name_match = re.search(r'(?:to|for|,)\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth)', user_message, re.IGNORECASE)
+            name_match = re.search(r'to\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth|\+?[\d])', user_message, re.IGNORECASE)
             if not name_match:
                 name_match = re.search(r'to\s+([A-Za-z]+)', user_message, re.IGNORECASE)
             if not name_match:
