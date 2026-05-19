@@ -49,6 +49,9 @@ def save_invoice(customer_name, customer_email, items, total_amount, business_na
     # Use phone as primary key if available, fall back to email, then name
     lookup = _customer_lookup(customer_name, customer_email, customer_phone, business_id)
     existing = customers.find_one({**lookup, "business_id": business_id})
+    if not existing and customer_phone:
+        # Phone not found under this business — try by name as fallback
+        existing = customers.find_one({"customer_name": customer_name, "business_id": business_id})
     if existing:
         update = {"$inc": {"outstanding_balance": total_amount, "total_invoiced": total_amount}}
         # Fill in missing contact info if now provided
@@ -144,6 +147,18 @@ def update_customer_phone(customer_name, customer_phone, business_id="default"):
         {"customer_name": customer_name, "business_id": business_id},
         {"$set": {"customer_phone": customer_phone}}
     )
+    if result.matched_count == 0:
+        # Customer may have been saved without a name match — insert fresh record
+        customers.insert_one({
+            "business_id": business_id,
+            "customer_name": customer_name,
+            "customer_phone": customer_phone,
+            "customer_email": "",
+            "outstanding_balance": 0,
+            "total_invoiced": 0,
+            "total_paid": 0
+        })
+        return 1
     return result.matched_count
 
 
