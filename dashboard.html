@@ -334,7 +334,12 @@ function loadProfile() {
     document.getElementById("sidebarProfile").style.display = "block";
     document.getElementById("sidebarBizName").textContent = profile.bizName;
     document.getElementById("sidebarOwnerName").textContent = profile.ownerName;
-    document.getElementById("messages").innerHTML = `<div class="msg bot">Welcome back ${profile.ownerName}! I'm here to help with ${profile.bizName}. Try: Who owes me money?</div>`;
+    const isNew = localStorage.getItem("prosperIsNew");
+    const greeting = isNew
+      ? `Hi ${profile.ownerName}! Welcome to Prosper. I'm your AI business assistant for ${profile.bizName}. You can create invoices, record sales, and track who owes you money. What would you like to do first?`
+      : `Welcome back ${profile.ownerName}! Ready to help with ${profile.bizName}.`;
+    localStorage.removeItem("prosperIsNew");
+    document.getElementById("messages").innerHTML = `<div class="msg bot">${greeting}</div>`;
     loadDash();
   } else {
     document.getElementById("welcomeModal").style.display = "flex";
@@ -347,6 +352,7 @@ async function saveProfile() {
   const bizEmail = document.getElementById("bizEmail").value.trim();
   if (!bizName || !ownerName || !bizEmail) { alert("Please fill all fields"); return; }
   localStorage.setItem("prosperProfile", JSON.stringify({ bizName, ownerName, bizEmail }));
+  localStorage.setItem("prosperIsNew", "1");
   try {
     await fetch(API + "/api/register", {
       method: "POST",
