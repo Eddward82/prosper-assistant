@@ -158,7 +158,7 @@ def set_customer_phone(customer_name: str, customer_phone: str, business_id: str
     phone = _extract_phone(customer_phone) or customer_phone
     count = update_customer_phone(customer_name, phone, business_id)
     if count == 0:
-        return f"No customer named '{customer_name}' found. Create an invoice for them first."
+        return f"No customer named '{customer_name}' found under business '{business_id}'. Create an invoice for them first."
     return f"Phone number {phone} saved for {customer_name}."
 
 
