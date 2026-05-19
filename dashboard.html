@@ -132,6 +132,16 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .start-btn{width:100%;padding:14px;background:#0d3d26;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;margin-top:6px;transition:background 0.15s;}
 .start-btn:hover{background:#16a34a;}
 
+/* WELCOME MESSAGE */
+.welcome-msg{font-size:13.5px;line-height:1.7;color:#1a1a2e;}
+.welcome-msg .w-hi{font-size:15px;font-weight:700;color:#0d3d26;margin-bottom:6px;}
+.welcome-msg .w-sub{color:#6b7280;font-size:12.5px;margin-bottom:10px;}
+.welcome-msg .w-list{list-style:none;padding:0;margin:8px 0 12px;}
+.welcome-msg .w-list li{padding:4px 0;color:#374151;font-size:13px;}
+.welcome-msg .w-list li::before{content:"✦ ";color:#16a34a;font-size:10px;}
+.welcome-msg .w-try{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:12px;color:#15803d;margin-top:4px;}
+.welcome-msg .w-try b{display:block;margin-bottom:2px;color:#0d3d26;}
+
 /* CHAT FORMATTED TEXT */
 .chat-report{font-size:13px;line-height:1.7;color:#1a1a2e;}
 .chat-report .rpt-title{font-weight:700;font-size:13px;color:#0d3d26;margin-bottom:4px;}
@@ -335,10 +345,24 @@ function loadProfile() {
     document.getElementById("sidebarBizName").textContent = profile.bizName;
     document.getElementById("sidebarOwnerName").textContent = profile.ownerName;
     const isNew = localStorage.getItem("prosperIsNew");
-    const greeting = isNew
-      ? `Hi ${profile.ownerName}! Welcome to Prosper. I'm your AI business assistant for ${profile.bizName}. You can create invoices, record sales, and track who owes you money. What would you like to do first?`
-      : `Welcome back ${profile.ownerName}! Ready to help with ${profile.bizName}.`;
     localStorage.removeItem("prosperIsNew");
+    const greeting = isNew
+      ? `<div class="welcome-msg">
+          <div class="w-hi">Hi ${profile.ownerName}! 👋</div>
+          <div class="w-sub">Your Prosper dashboard is ready. Here's what I can do for you:</div>
+          <ul class="w-list">
+            <li>Create &amp; send invoices to customers</li>
+            <li>Record cash sales and track profit</li>
+            <li>See who owes you money</li>
+            <li>Generate today's and lifetime reports</li>
+          </ul>
+          <div class="w-try"><b>Try saying:</b>"Send invoice to Chidi 08012345678 for cement worth 50000"</div>
+        </div>`
+      : `<div class="welcome-msg">
+          <div class="w-hi">Welcome back ${profile.ownerName}! 👋</div>
+          <div class="w-sub">${profile.bizName} is all set. What would you like to do today?</div>
+          <div class="w-try"><b>Quick actions:</b>Who owes me money? &nbsp;·&nbsp; Today report &nbsp;·&nbsp; Lifetime report</div>
+        </div>`;
     document.getElementById("messages").innerHTML = `<div class="msg bot">${greeting}</div>`;
     loadDash();
   } else {
