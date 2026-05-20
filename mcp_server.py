@@ -246,6 +246,41 @@ async def chat_endpoint(request: Request):
     msg_lower = user_message.lower()
     db = get_db()
 
+    # ── Check if user is replying to a disambiguation prompt ──
+    pending_disambig = db["pending_disambig"].find_one({"business_id": business_id})
+    if pending_disambig:
+        choice = user_message.strip()
+        if choice in ["1", "2", "3", "4"]:
+            idx = int(choice) - 1
+            matches = pending_disambig.get("matches", [])
+            if idx < len(matches):
+                chosen = matches[idx]
+                action = pending_disambig.get("action", "invoice")
+                db["pending_disambig"].delete_one({"business_id": business_id})
+                customer_name = chosen.get("customer_name")
+                customer_phone = chosen.get("customer_phone", "")
+                customer_email = chosen.get("customer_email", "")
+                if action == "invoice":
+                    description = pending_disambig.get("description", "goods/services")
+                    amount = pending_disambig.get("amount", 0)
+                    if customer_email:
+                        result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
+                    else:
+                        invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
+                        result = f"Invoice {invoice_number} created for {customer_name} - NGN {amount:,}. No email on file, so I didn't send it."
+                elif action == "credit":
+                    description = pending_disambig.get("description", "items")
+                    amount = pending_disambig.get("amount", 0)
+                    if customer_email:
+                        result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
+                    else:
+                        invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
+                        result = f"Credit sale recorded! Invoice {invoice_number} for {customer_name} - NGN {amount:,}. No email on file so I didn't send it."
+                return JSONResponse({"response": result})
+            else:
+                db["pending_disambig"].delete_one({"business_id": business_id})
+                return JSONResponse({"response": "Invalid choice. Please start over."})
+
     # ── Check if user is replying with cost for a pending sale ──
     pending = db["pending_sales"].find_one({"business_id": business_id})
     if pending:
@@ -346,10 +381,15 @@ async def chat_endpoint(request: Request):
 
             if ambiguous:
                 options = "\n".join(
-                    f"  - {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
-                    for m in matches
+                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
+                    for i, m in enumerate(matches)
                 )
-                result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nPlease include their phone number to specify."
+                db["pending_disambig"].update_one(
+                    {"business_id": business_id},
+                    {"$set": {"business_id": business_id, "action": "credit", "description": description, "amount": amount, "matches": matches}},
+                    upsert=True
+                )
+                result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nReply with 1 or 2 to select."
             else:
                 customer_phone = phone_in_msg
                 if cust_doc:
@@ -432,10 +472,15 @@ async def chat_endpoint(request: Request):
 
                 if ambiguous:
                     options = "\n".join(
-                        f"  - {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
-                        for m in matches
+                        f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
+                        for i, m in enumerate(matches)
                     )
-                    result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nPlease include their phone number to specify."
+                    db["pending_disambig"].update_one(
+                        {"business_id": business_id},
+                        {"$set": {"business_id": business_id, "action": "invoice", "description": description, "amount": amount, "matches": matches}},
+                        upsert=True
+                    )
+                    result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nReply with 1 or 2 to select."
                 else:
                     customer_phone = phone_in_msg
                     if cust_doc:
