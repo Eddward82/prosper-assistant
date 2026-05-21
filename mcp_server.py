@@ -302,7 +302,78 @@ async def chat_endpoint(request: Request):
     )
 
     if is_split:
-        pass  # fall through to split payment handler below
+        # Split payment: part cash + part credit
+        # e.g. "Tunde bought cement worth 70000, paid 50000 cash, owes 20000"
+        expanded = re.sub(r'(\d+(?:\.\d+)?)k\b', lambda m: str(int(float(m.group(1)) * 1000)), user_message, flags=re.IGNORECASE)
+        numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', expanded.replace(",", ""))
+        numbers = [float(n) for n in numbers]
+
+        name_match = re.search(r'(?:from\s+|to\s+)?([A-Za-z]+)\s+(?:bought|paid|made)', user_message, re.IGNORECASE)
+        if not name_match:
+            name_match = re.search(r'([A-Za-z]+)\s+(?:bought|paid)', user_message, re.IGNORECASE)
+
+        if not name_match or len(numbers) < 2:
+            result = "Please include the customer name and amounts. Example: 'Tunde bought cement worth 70000, paid 50000 cash, owes 20000'"
+        else:
+            customer_name = name_match.group(1).capitalize()
+            phone_in_msg = _extract_phone(user_message)
+            email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
+            customer_email = email_match.group(0) if email_match else None
+
+            total_amount = max(numbers)
+            remaining = [n for n in numbers if n != total_amount]
+
+            cash_match = re.search(r'paid\s+([\d,]+)', expanded, re.IGNORECASE)
+            owes_match = re.search(r'owes?\s+([\d,]+)|balance\s+([\d,]+)', expanded, re.IGNORECASE)
+            deposit_match = re.search(r'deposit\s+(?:of\s+)?([\d,]+)', expanded, re.IGNORECASE)
+
+            if cash_match:
+                cash_paid = float(cash_match.group(1).replace(",", ""))
+            elif deposit_match:
+                cash_paid = float(deposit_match.group(1).replace(",", ""))
+            elif remaining:
+                cash_paid = remaining[0]
+            else:
+                cash_paid = 0
+
+            if owes_match:
+                balance_owed = float((owes_match.group(1) or owes_match.group(2)).replace(",", ""))
+            else:
+                balance_owed = total_amount - cash_paid
+
+            item_match = re.search(r'(?:bought|sold)\s+(.+?)\s+(?:worth|for)', user_message, re.IGNORECASE)
+            description = item_match.group(1).strip() if item_match else "goods/services"
+
+            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "", customer_email or "")
+
+            if ambiguous:
+                options = "\n".join(
+                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
+                    for i, m in enumerate(matches)
+                )
+                db["pending_disambig"].update_one(
+                    {"business_id": business_id},
+                    {"$set": {"business_id": business_id, "action": "invoice", "description": description, "amount": balance_owed, "matches": matches}},
+                    upsert=True
+                )
+                result = f"I found {len(matches)} customers named {customer_name}. Which one?\n{options}\nReply with 1 or 2."
+            else:
+                if cust_doc:
+                    phone_in_msg = phone_in_msg or cust_doc.get("customer_phone", "")
+                    customer_email = customer_email or cust_doc.get("customer_email", "")
+
+                if cash_paid > 0:
+                    log_sale(description, 1, cash_paid, cash_paid * 0.7, business_id)
+
+                if balance_owed > 0:
+                    if not phone_in_msg:
+                        result = f"Please include {customer_name}'s phone number for the balance invoice. Example: add '+2348012345678' to your message."
+                    else:
+                        invoice_number = save_invoice(customer_name, customer_email or "", [{"description": f"{description} (balance)", "amount": balance_owed}], balance_owed, business_name, business_id, phone_in_msg)
+                        result = f"Split payment recorded for {customer_name}!\n• Cash received: NGN {cash_paid:,.0f}\n• Balance invoice {invoice_number}: NGN {balance_owed:,.0f}\n• Total transaction: NGN {total_amount:,.0f}"
+                else:
+                    result = f"Full payment of NGN {cash_paid:,.0f} recorded for {customer_name}."
+
     elif "owe" in msg_lower or "unpaid" in msg_lower:
         result = check_unpaid_invoices(business_id)
 
@@ -412,83 +483,6 @@ async def chat_endpoint(request: Request):
                 else:
                     invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
                     result = f"Credit sale recorded! Invoice {invoice_number} for {customer_name} - NGN {amount:,}. No email on file so I didn't send it."
-
-    elif is_split:
-        # Split payment: part cash + part credit
-        # e.g. "Tunde bought cement worth 70000, paid 50000 cash, owes 20000"
-        expanded = re.sub(r'(\d+(?:\.\d+)?)k\b', lambda m: str(int(float(m.group(1)) * 1000)), user_message, flags=re.IGNORECASE)
-        numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', expanded.replace(",", ""))
-        numbers = [float(n) for n in numbers]
-
-        name_match = re.search(r'(?:from\s+|to\s+)?([A-Za-z]+)\s+(?:bought|paid|made)', user_message, re.IGNORECASE)
-        if not name_match:
-            name_match = re.search(r'([A-Za-z]+)\s+(?:bought|paid)', user_message, re.IGNORECASE)
-
-        if not name_match or len(numbers) < 2:
-            result = "Please include the customer name and amounts. Example: 'Tunde bought cement worth 70000, paid 50000 cash, owes 20000'"
-        else:
-            customer_name = name_match.group(1).capitalize()
-            phone_in_msg = _extract_phone(user_message)
-            email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
-            customer_email = email_match.group(0) if email_match else None
-
-            # Find total, cash paid, balance owed from numbers
-            total_amount = max(numbers)
-            remaining = [n for n in numbers if n != total_amount]
-
-            # Try to identify cash vs balance
-            cash_match = re.search(r'paid\s+([\d,]+)', expanded, re.IGNORECASE)
-            owes_match = re.search(r'owes?\s+([\d,]+)|balance\s+([\d,]+)', expanded, re.IGNORECASE)
-            deposit_match = re.search(r'deposit\s+(?:of\s+)?([\d,]+)', expanded, re.IGNORECASE)
-
-            if cash_match:
-                cash_paid = float(cash_match.group(1).replace(",", ""))
-            elif deposit_match:
-                cash_paid = float(deposit_match.group(1).replace(",", ""))
-            elif remaining:
-                cash_paid = remaining[0]
-            else:
-                cash_paid = 0
-
-            if owes_match:
-                balance_owed = float((owes_match.group(1) or owes_match.group(2)).replace(",", ""))
-            else:
-                balance_owed = total_amount - cash_paid
-
-            item_match = re.search(r'(?:bought|sold)\s+(.+?)\s+(?:worth|for)', user_message, re.IGNORECASE)
-            description = item_match.group(1).strip() if item_match else "goods/services"
-
-            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "", customer_email or "")
-
-            if ambiguous:
-                options = "\n".join(
-                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
-                    for i, m in enumerate(matches)
-                )
-                db["pending_disambig"].update_one(
-                    {"business_id": business_id},
-                    {"$set": {"business_id": business_id, "action": "invoice", "description": description, "amount": balance_owed, "matches": matches}},
-                    upsert=True
-                )
-                result = f"I found {len(matches)} customers named {customer_name}. Which one?\n{options}\nReply with 1 or 2."
-            else:
-                if cust_doc:
-                    phone_in_msg = phone_in_msg or cust_doc.get("customer_phone", "")
-                    customer_email = customer_email or cust_doc.get("customer_email", "")
-
-                # Record cash portion as a sale
-                if cash_paid > 0:
-                    log_sale(description, 1, cash_paid, cash_paid * 0.7, business_id)
-
-                # Record balance as invoice
-                if balance_owed > 0:
-                    if not phone_in_msg:
-                        result = f"Please include {customer_name}'s phone number for the balance invoice. Example: add '+2348012345678' to your message."
-                    else:
-                        invoice_number = save_invoice(customer_name, customer_email or "", [{"description": f"{description} (balance)","amount": balance_owed}], balance_owed, business_name, business_id, phone_in_msg)
-                        result = f"Split payment recorded for {customer_name}!\n• Cash received: NGN {cash_paid:,.0f}\n• Balance invoice {invoice_number}: NGN {balance_owed:,.0f}\n• Total transaction: NGN {total_amount:,.0f}"
-                else:
-                    result = f"Full payment of NGN {cash_paid:,.0f} recorded for {customer_name}."
 
     elif "sold" in msg_lower or "i sold" in msg_lower or "sale of" in msg_lower:
         expanded = re.sub(r'(\d+(?:\.\d+)?)k\b', lambda m: str(int(float(m.group(1)) * 1000)), user_message, flags=re.IGNORECASE)
