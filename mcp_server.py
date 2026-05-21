@@ -346,18 +346,19 @@ async def chat_endpoint(request: Request):
         ),
         FunctionDeclaration(
             name="mark_invoice_paid",
-            description="Mark an invoice as paid.",
+            description="Mark an invoice as paid. ONLY use when user explicitly says 'mark as paid', 'mark paid', 'payment received for INV-xxx'. Do NOT use when user just types an invoice number alone.",
             parameters={"type": "object", "properties": {
                 "invoice_number": {"type": "string", "description": "Invoice number like INV-001"},
             }, "required": ["invoice_number"]},
         ),
         FunctionDeclaration(
             name="update_customer_email",
-            description="Update or add an email address for an existing customer.",
+            description="Update or add an email address for an existing customer. Use when user says '[name] email is ...' or 'send email to [name] at ...' or 'update [name] email'. Also use when user wants to send an invoice email to a customer who already has an invoice — save the email then resend.",
             parameters={"type": "object", "properties": {
                 "customer_name": {"type": "string"},
                 "customer_phone": {"type": "string", "description": "Phone number to identify customer if name is ambiguous, else empty string"},
                 "customer_email": {"type": "string"},
+                "resend_invoice_number": {"type": "string", "description": "If user wants to send/resend an invoice after updating the email, include the invoice number here. Else empty string."},
             }, "required": ["customer_name", "customer_email"]},
         ),
         FunctionDeclaration(
@@ -370,7 +371,7 @@ async def chat_endpoint(request: Request):
         ),
         FunctionDeclaration(
             name="resend_invoice",
-            description="Resend an invoice email to a customer.",
+            description="Resend an invoice email to a customer. Use when user says 'resend', 'send again', 'I didn't receive it' and provides an invoice number.",
             parameters={"type": "object", "properties": {
                 "invoice_number": {"type": "string"},
             }, "required": ["invoice_number"]},
@@ -433,6 +434,7 @@ async def chat_endpoint(request: Request):
             customer_name = args["customer_name"]
             customer_email = args["customer_email"]
             phone_in_msg = _extract_phone(args.get("customer_phone", "")) or args.get("customer_phone", "")
+            resend_inv = args.get("resend_invoice_number", "").upper().strip()
             cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg)
             if ambiguous:
                 options = "\n".join(
@@ -449,6 +451,18 @@ async def chat_endpoint(request: Request):
                     {"$set": {"customer_email": customer_email}}
                 )
                 result = f"Updated! {customer_name}'s email is now {customer_email}."
+                # If user also wants to send/resend an invoice, do it now
+                if resend_inv:
+                    inv = db["invoice"].find_one({"invoice_number": resend_inv, "business_id": business_id})
+                    if inv:
+                        sent = send_invoice_email(customer_name, customer_email, resend_inv, inv.get("items", []), inv["total_amount"], business_name)
+                        result += f"\nInvoice {resend_inv} sent to {customer_email}!" if sent else f"\nEmail update saved but failed to send {resend_inv}."
+                    else:
+                        # Try sending the most recent invoice for this customer
+                        inv = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
+                        if inv:
+                            sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], business_name)
+                            result += f"\nInvoice {inv['invoice_number']} sent to {customer_email}!" if sent else f"\nEmail saved but could not send invoice."
 
         elif fn == "resend_invoice":
             inv_number = args["invoice_number"].upper()
