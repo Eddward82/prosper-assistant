@@ -392,13 +392,18 @@ async def chat_endpoint(request: Request):
 
     try:
         model = genai.GenerativeModel("gemini-2.0-flash", tools=[tools], system_instruction=system_prompt)
-        # Build conversation history for context
-        gemini_history = []
-        for h in history[-10:]:  # last 10 turns max
-            role = "user" if h.get("role") == "user" else "model"
-            gemini_history.append({"role": role, "parts": [{"text": h.get("text", "")}]})
-        chat = model.start_chat(history=gemini_history)
-        response = chat.send_message(user_message)
+        # Collapse recent history into the current message so Gemini has full context
+        # but still produces a single function call rather than continuing the conversation
+        if history:
+            context_lines = []
+            for h in history[-6:]:  # last 3 turns
+                role = "User" if h.get("role") == "user" else "Assistant"
+                context_lines.append(f"{role}: {h.get('text','')}")
+            context_block = "\n".join(context_lines)
+            full_message = f"Previous conversation:\n{context_block}\n\nUser now says: {user_message}\n\nBased on the full conversation above, call the appropriate function with all available details."
+        else:
+            full_message = user_message
+        response = model.generate_content(full_message)
 
         # Find the function call part if present
         fn = None
