@@ -524,7 +524,7 @@ async def chat_endpoint(request: Request):
         else:
             result = mark_invoice_as_paid(inv_match.group(0).upper(), business_id)
 
-    elif "invoice" in msg_lower:
+    elif "invoice" in msg_lower or re.search(r'\bsend\s+inv\b', msg_lower):
         numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', user_message.replace(",", ""))
         numbers = [float(n) for n in numbers]
         amount = numbers[-1] if numbers else 0
@@ -532,13 +532,15 @@ async def chat_endpoint(request: Request):
         if amount == 0:
             result = "Please include an amount. Try: 'Send invoice to Chidi at chidi@gmail.com for 50000'"
         else:
+            # Exclude reserved words that are not customer names
+            _reserved = {"inv", "invoice", "to", "for", "at", "the"}
             name_match = re.search(r'to\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth|\+?[\d])', user_message, re.IGNORECASE)
-            if not name_match:
+            if not name_match or name_match.group(1).lower() in _reserved:
                 name_match = re.search(r'to\s+([A-Za-z]+)', user_message, re.IGNORECASE)
-            if not name_match:
+            if not name_match or name_match.group(1).lower() in _reserved:
                 name_match = re.search(r'(?:^|\s)([A-Za-z]+)\s+(?:took|bought|owes)', user_message, re.IGNORECASE)
 
-            if not name_match:
+            if not name_match or name_match.group(1).lower() in _reserved:
                 result = "I couldn't find the customer's name. Try: 'Send invoice to Chidi for 50000'"
             else:
                 customer_name = name_match.group(1).capitalize()
