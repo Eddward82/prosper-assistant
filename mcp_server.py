@@ -244,6 +244,7 @@ async def chat_endpoint(request: Request):
     body = await request.body()
     data = json.loads(body)
     user_message = data.get("message", "")
+    history = data.get("history", [])  # [{role, text}, ...]
     profile = data.get("profile", {})
     business_id = profile.get("bizName", "default").lower().replace(" ", "-")
     business_name = profile.get("bizName", "Prosper Stores")
@@ -391,7 +392,13 @@ async def chat_endpoint(request: Request):
 
     try:
         model = genai.GenerativeModel("gemini-2.0-flash", tools=[tools], system_instruction=system_prompt)
-        response = model.generate_content(user_message)
+        # Build conversation history for context
+        gemini_history = []
+        for h in history[-10:]:  # last 10 turns max
+            role = "user" if h.get("role") == "user" else "model"
+            gemini_history.append({"role": role, "parts": [{"text": h.get("text", "")}]})
+        chat = model.start_chat(history=gemini_history)
+        response = chat.send_message(user_message)
 
         # Find the function call part if present
         fn = None

@@ -866,6 +866,8 @@ function renderResponse(text) {
   return `<div class="msg bot">${cleanAmounts(text)}</div>`;
 }
 
+const chatHistory = [];
+
 async function send() {
   const i = document.getElementById("input");
   const t = i.value.trim();
@@ -880,12 +882,16 @@ async function send() {
     const r = await fetch(API + "/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: t, profile: profile })
+      body: JSON.stringify({ message: t, profile: profile, history: chatHistory })
     });
     const d = await r.json();
     document.getElementById("ld").remove();
     m.insertAdjacentHTML("beforeend", renderResponse(d.response));
     m.scrollTop = m.scrollHeight;
+    // Keep last 10 turns in memory
+    chatHistory.push({ role: "user", text: t });
+    chatHistory.push({ role: "model", text: d.response });
+    if (chatHistory.length > 20) chatHistory.splice(0, 2);
     loadDash();
   } catch (e) { document.getElementById("ld").remove(); }
 }
