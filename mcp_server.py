@@ -308,9 +308,9 @@ async def chat_endpoint(request: Request):
         numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', expanded.replace(",", ""))
         numbers = [float(n) for n in numbers]
 
-        name_match = re.search(r'(?:from\s+|to\s+)?([A-Za-z]+)\s+(?:bought|paid|made)', user_message, re.IGNORECASE)
+        name_match = re.search(r'(?:from\s+|to\s+)?([A-Za-z]+)\s+(?:\+?[\d]+\s+)?(?:bought|paid|made)', user_message, re.IGNORECASE)
         if not name_match:
-            name_match = re.search(r'([A-Za-z]+)\s+(?:bought|paid)', user_message, re.IGNORECASE)
+            name_match = re.search(r'([A-Za-z]+)\s+(?:\+?[\d]+\s+)?(?:bought|paid)', user_message, re.IGNORECASE)
 
         if not name_match or len(numbers) < 2:
             result = "Please include the customer name and amounts. Example: 'Tunde bought cement worth 70000, paid 50000 cash, owes 20000'"
