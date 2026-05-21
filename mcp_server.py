@@ -509,10 +509,47 @@ async def chat_endpoint(request: Request):
     return JSONResponse({"response": result})
 
 
+async def customers_endpoint(request: Request):
+    db = get_db()
+    business_id = request.query_params.get("business_id", "default")
+    customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
+    return JSONResponse({"customers": [{
+        "customer_name": c.get("customer_name", ""),
+        "customer_phone": c.get("customer_phone", ""),
+        "customer_email": c.get("customer_email", ""),
+        "outstanding_balance": c.get("outstanding_balance", 0),
+        "total_invoiced": c.get("total_invoiced", 0),
+        "total_paid": c.get("total_paid", 0),
+    } for c in customers]})
+
+
+async def sales_endpoint(request: Request):
+    db = get_db()
+    business_id = request.query_params.get("business_id", "default")
+    date_from = request.query_params.get("from", "")
+    date_to = request.query_params.get("to", "")
+    query = {"business_id": business_id}
+    if date_from and date_to:
+        query["date"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        query["date"] = {"$gte": date_from}
+    sales = list(db["sales"].find(query, {"_id": 0}).sort("date", -1))
+    return JSONResponse({"sales": [{
+        "date": s.get("date", ""),
+        "item": s.get("item", ""),
+        "quantity": s.get("quantity", 0),
+        "sale_amount": s.get("sale_amount", 0),
+        "cost_amount": s.get("cost_amount", 0),
+        "profit": s.get("profit", 0),
+    } for s in sales]})
+
+
 app = mcp.http_app()
 app.routes.append(Route("/api/register", register_business_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/dashboard", dashboard_data, methods=["GET"]))
 app.routes.append(Route("/api/chat", chat_endpoint, methods=["POST", "OPTIONS"]))
+app.routes.append(Route("/api/customers", customers_endpoint, methods=["GET"]))
+app.routes.append(Route("/api/sales", sales_endpoint, methods=["GET"]))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

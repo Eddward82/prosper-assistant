@@ -101,9 +101,17 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .metric-value.warning{color:#d97706;}
 .metric-value.small{font-size:22px;}
 
+/* RIGHT PANEL TABS */
+.panel-tabs{display:flex;gap:2px;padding:12px 14px 0;border-bottom:1px solid #f1f3f4;background:white;border-radius:14px 14px 0 0;}
+.panel-tab{padding:8px 14px;font-size:12px;font-weight:600;color:#9ca3af;cursor:pointer;border-radius:6px 6px 0 0;border-bottom:2px solid transparent;transition:all 0.15s;}
+.panel-tab.active{color:#0d3d26;border-bottom-color:#0d3d26;background:#f0fdf4;}
+.panel-tab:hover:not(.active){color:#374151;background:#f8fafc;}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
 /* INVOICES */
-.invoices-card{background:white;border-radius:14px;border:1px solid #e8eaed;flex:1;}
-.invoices-header{padding:16px 18px;border-bottom:1px solid #f1f3f4;display:flex;align-items:center;justify-content:space-between;}
+.invoices-card{background:white;border-radius:14px;border:1px solid #e8eaed;flex:1;overflow:hidden;}
+.invoices-header{padding:14px 18px;border-bottom:1px solid #f1f3f4;display:flex;align-items:center;justify-content:space-between;}
 .invoices-title{font-size:13px;font-weight:600;color:#1a1a2e;}
 .invoices-count{background:#fef2f2;color:#dc2626;font-size:11px;font-weight:600;padding:3px 8px;border-radius:10px;}
 .invoice-row{padding:11px 18px;border-bottom:1px solid #f8fafc;display:flex;align-items:center;justify-content:space-between;transition:background 0.1s;}
@@ -115,6 +123,25 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .invoice-phone{font-size:11px;color:#9ca3af;margin-top:1px;}
 .invoice-amount{font-size:13px;font-weight:700;color:#1a1a2e;margin-left:auto;white-space:nowrap;}
 .unpaid-badge{font-size:10px;font-weight:600;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:2px 7px;border-radius:8px;margin-top:2px;display:inline-block;}
+
+/* CUSTOMERS TABLE */
+.data-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.data-table th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#9ca3af;padding:10px 14px;border-bottom:1px solid #f1f3f4;background:#fafbfc;}
+.data-table td{padding:10px 14px;border-bottom:1px solid #f8fafc;vertical-align:middle;color:#374151;}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:#fafbfc;}
+.cust-name{font-weight:600;color:#1a1a2e;font-size:13px;}
+.cust-phone{font-size:11px;color:#9ca3af;margin-top:1px;}
+.owe-amount{font-weight:700;color:#d97706;}
+.paid-amount{font-weight:600;color:#16a34a;}
+
+/* DATE FILTER */
+.filter-bar{padding:12px 14px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #f1f3f4;background:#fafbfc;}
+.filter-bar input{padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:'Plus Jakarta Sans',sans-serif;color:#1a1a2e;outline:none;flex:1;}
+.filter-bar input:focus{border-color:#16a34a;}
+.filter-btn{padding:7px 14px;background:#0d3d26;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;}
+.filter-btn:hover{background:#16a34a;}
+.empty-state{padding:32px;text-align:center;color:#9ca3af;font-size:13px;}
 .dl-btn{font-size:10px;font-weight:600;color:#0d3d26;background:#dcfce7;border:1px solid #bbf7d0;border-radius:5px;padding:4px 8px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:all 0.15s;white-space:nowrap;margin-left:10px;flex-shrink:0;}
 .dl-btn:hover{background:#0d3d26;color:white;border-color:#0d3d26;}
 
@@ -432,12 +459,37 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
           </div>
         </div>
 
+        <!-- TABBED PANEL -->
         <div class="invoices-card">
-          <div class="invoices-header">
-            <span class="invoices-title">Unpaid Invoices</span>
-            <span class="invoices-count" id="unpaidCount">0</span>
+          <div class="panel-tabs">
+            <div class="panel-tab active" onclick="switchTab('invoices')">Unpaid Invoices</div>
+            <div class="panel-tab" onclick="switchTab('customers')">Customers</div>
+            <div class="panel-tab" onclick="switchTab('sales')">Sales History</div>
           </div>
-          <div id="unpaidList"></div>
+
+          <!-- TAB: Invoices -->
+          <div class="tab-content active" id="tab-invoices">
+            <div class="invoices-header">
+              <span class="invoices-title">Unpaid Invoices</span>
+              <span class="invoices-count" id="unpaidCount">0</span>
+            </div>
+            <div id="unpaidList"></div>
+          </div>
+
+          <!-- TAB: Customers -->
+          <div class="tab-content" id="tab-customers">
+            <div id="customersList"><div class="empty-state">Loading customers...</div></div>
+          </div>
+
+          <!-- TAB: Sales History -->
+          <div class="tab-content" id="tab-sales">
+            <div class="filter-bar">
+              <input type="date" id="salesFrom" title="From date">
+              <input type="date" id="salesTo" title="To date">
+              <button class="filter-btn" onclick="loadSales()">Filter</button>
+            </div>
+            <div id="salesList"><div class="empty-state">Loading sales...</div></div>
+          </div>
         </div>
       </div>
 
@@ -568,6 +620,75 @@ async function loadDash() {
         </div>
       </div>`).join("");
   } catch (e) { console.error(e); }
+}
+
+function switchTab(name) {
+  document.querySelectorAll(".panel-tab").forEach((t, i) => {
+    t.classList.toggle("active", ["invoices","customers","sales"][i] === name);
+  });
+  document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  if (name === "customers") loadCustomers();
+  if (name === "sales") loadSales();
+}
+
+async function loadCustomers() {
+  const profile = JSON.parse(localStorage.getItem("prosperProfile") || "{}");
+  const bizId = (profile.bizName || "default").toLowerCase().replace(/ /g, "-");
+  try {
+    const r = await fetch(API + "/api/customers?business_id=" + bizId);
+    const d = await r.json();
+    const customers = d.customers || [];
+    if (!customers.length) {
+      document.getElementById("customersList").innerHTML = '<div class="empty-state">No customers yet. Create an invoice to add one.</div>';
+      return;
+    }
+    document.getElementById("customersList").innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Customer</th><th>Owed</th><th>Paid</th></tr></thead>
+        <tbody>${customers.map(c => `
+          <tr>
+            <td>
+              <div class="cust-name">${c.customer_name}</div>
+              <div class="cust-phone">${c.customer_phone || ""}${c.customer_email ? " · " + c.customer_email : ""}</div>
+            </td>
+            <td><span class="owe-amount">NGN ${Math.round(c.outstanding_balance).toLocaleString()}</span></td>
+            <td><span class="paid-amount">NGN ${Math.round(c.total_paid).toLocaleString()}</span></td>
+          </tr>`).join("")}
+        </tbody>
+      </table>`;
+  } catch(e) { document.getElementById("customersList").innerHTML = '<div class="empty-state">Could not load customers.</div>'; }
+}
+
+async function loadSales() {
+  const profile = JSON.parse(localStorage.getItem("prosperProfile") || "{}");
+  const bizId = (profile.bizName || "default").toLowerCase().replace(/ /g, "-");
+  const from = document.getElementById("salesFrom").value;
+  const to = document.getElementById("salesTo").value;
+  let url = API + "/api/sales?business_id=" + bizId;
+  if (from) url += "&from=" + from;
+  if (to) url += "&to=" + to;
+  try {
+    const r = await fetch(url);
+    const d = await r.json();
+    const sales = d.sales || [];
+    if (!sales.length) {
+      document.getElementById("salesList").innerHTML = '<div class="empty-state">No sales found for this period.</div>';
+      return;
+    }
+    document.getElementById("salesList").innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th style="text-align:right">Profit</th></tr></thead>
+        <tbody>${sales.map(s => `
+          <tr>
+            <td style="color:#6b7280;font-size:11px">${s.date}</td>
+            <td>${s.item}</td>
+            <td style="color:#6b7280">${s.quantity}</td>
+            <td style="text-align:right;font-weight:700;color:#16a34a">NGN ${Math.round(s.profit).toLocaleString()}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>`;
+  } catch(e) { document.getElementById("salesList").innerHTML = '<div class="empty-state">Could not load sales.</div>'; }
 }
 
 function downloadInvoice(inv) {
