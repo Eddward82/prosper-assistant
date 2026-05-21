@@ -388,14 +388,23 @@ async def chat_endpoint(request: Request):
     try:
         model = genai.GenerativeModel("gemini-1.5-flash", tools=[tools], system_instruction=system_prompt)
         response = model.generate_content(user_message)
-        part = response.candidates[0].content.parts[0]
 
-        if not hasattr(part, "function_call") or not part.function_call.name:
-            # No function call — plain conversational response
-            return JSONResponse({"response": part.text})
+        # Find the function call part if present
+        fn = None
+        args = {}
+        plain_text = None
+        for part in response.candidates[0].content.parts:
+            fc = getattr(part, "function_call", None)
+            if fc and getattr(fc, "name", None):
+                fn = fc.name
+                args = dict(fc.args)
+                break
+            txt = getattr(part, "text", None)
+            if txt:
+                plain_text = txt
 
-        fn = part.function_call.name
-        args = dict(part.function_call.args)
+        if not fn:
+            return JSONResponse({"response": plain_text or "No wahala! How can I help you today?"})
 
         # ── Execute the chosen function ──────────────────────────
         if fn == "check_unpaid_invoices":
@@ -536,7 +545,7 @@ async def chat_endpoint(request: Request):
 
     except Exception as e:
         logger.error("Gemini error: %s", e)
-        result = "Something went wrong. Please try again."
+        return JSONResponse({"response": f"Error: {str(e)}"})
 
     return JSONResponse({"response": result})
 
