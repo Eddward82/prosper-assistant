@@ -236,52 +236,42 @@ async def register_business_endpoint(request: Request):
 
 async def chat_endpoint(request: Request):
     import json
-    from datetime import datetime
+    import google.generativeai as genai
+    from google.generativeai.types import FunctionDeclaration, Tool
     body = await request.body()
     data = json.loads(body)
     user_message = data.get("message", "")
     profile = data.get("profile", {})
     business_id = profile.get("bizName", "default").lower().replace(" ", "-")
     business_name = profile.get("bizName", "Prosper Stores")
-    msg_lower = user_message.lower()
     db = get_db()
 
-    # ── Check if user is replying to a disambiguation prompt ──
+    # ── Handle pending disambiguation (numbered selection) ──────
     pending_disambig = db["pending_disambig"].find_one({"business_id": business_id})
-    if pending_disambig:
-        choice = user_message.strip()
-        if choice in ["1", "2", "3", "4"]:
-            idx = int(choice) - 1
-            matches = pending_disambig.get("matches", [])
-            if idx < len(matches):
-                chosen = matches[idx]
-                action = pending_disambig.get("action", "invoice")
-                db["pending_disambig"].delete_one({"business_id": business_id})
-                customer_name = chosen.get("customer_name")
-                customer_phone = chosen.get("customer_phone", "")
-                customer_email = chosen.get("customer_email", "")
-                if action == "invoice":
-                    description = pending_disambig.get("description", "goods/services")
-                    amount = pending_disambig.get("amount", 0)
-                    if customer_email:
-                        result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
-                    else:
-                        invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
-                        result = f"Invoice {invoice_number} created for {customer_name} - NGN {amount:,}. No email on file, so I didn't send it."
-                elif action == "credit":
-                    description = pending_disambig.get("description", "items")
-                    amount = pending_disambig.get("amount", 0)
-                    if customer_email:
-                        result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
-                    else:
-                        invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
-                        result = f"Credit sale recorded! Invoice {invoice_number} for {customer_name} - NGN {amount:,}. No email on file so I didn't send it."
-                return JSONResponse({"response": result})
+    if pending_disambig and user_message.strip() in ["1", "2", "3", "4"]:
+        idx = int(user_message.strip()) - 1
+        matches = pending_disambig.get("matches", [])
+        if idx < len(matches):
+            chosen = matches[idx]
+            action = pending_disambig.get("action", "invoice")
+            db["pending_disambig"].delete_one({"business_id": business_id})
+            customer_name = chosen.get("customer_name")
+            customer_phone = chosen.get("customer_phone", "")
+            customer_email = chosen.get("customer_email", "")
+            description = pending_disambig.get("description", "goods/services")
+            amount = pending_disambig.get("amount", 0)
+            if customer_email:
+                result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
             else:
-                db["pending_disambig"].delete_one({"business_id": business_id})
-                return JSONResponse({"response": "Invalid choice. Please start over."})
+                invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
+                label = "Credit sale recorded! Invoice" if action == "credit" else "Invoice"
+                result = f"{label} {invoice_number} for {customer_name} - NGN {amount:,}. No email on file."
+        else:
+            db["pending_disambig"].delete_one({"business_id": business_id})
+            result = "Invalid choice. Please start over."
+        return JSONResponse({"response": result})
 
-    # ── Check if user is replying with cost for a pending sale ──
+    # ── Handle pending cost-price reply ─────────────────────────
     pending = db["pending_sales"].find_one({"business_id": business_id})
     if pending:
         cost_numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', user_message.replace(",", ""))
@@ -293,62 +283,231 @@ async def chat_endpoint(request: Request):
             db["pending_sales"].delete_one({"business_id": business_id})
             return JSONResponse({"response": result})
 
-    # ── Intent routing ───────────────────────────────────────────
-    # Split payment check must come before "owe" check since messages contain "owes"
-    is_split = (
-        any(kw in msg_lower for kw in ["part payment", "paid cash", "owes", "deposit", "balance"]) and
-        any(kw in msg_lower for kw in ["bought", "worth", "for"]) and
-        any(kw in msg_lower for kw in ["paid", "deposit", "cash"])
+    # ── Gemini function-calling intent router ────────────────────
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+    tools = Tool(function_declarations=[
+        FunctionDeclaration(
+            name="create_invoice",
+            description="Create an invoice or credit sale for a customer. Use when a customer is buying on credit, owes money, or when the user wants to send an invoice.",
+            parameters={"type": "object", "properties": {
+                "customer_name": {"type": "string", "description": "Full name of the customer"},
+                "customer_phone": {"type": "string", "description": "Nigerian phone number e.g. 08012345678"},
+                "customer_email": {"type": "string", "description": "Customer email address if provided, else empty string"},
+                "description": {"type": "string", "description": "What was sold or the invoice description"},
+                "amount": {"type": "number", "description": "Total invoice amount in Naira"},
+            }, "required": ["customer_name", "customer_phone", "description", "amount"]},
+        ),
+        FunctionDeclaration(
+            name="record_sale",
+            description="Record a completed cash sale. Use when items were sold and payment was received in full.",
+            parameters={"type": "object", "properties": {
+                "item": {"type": "string", "description": "Name of the item sold"},
+                "quantity": {"type": "integer", "description": "Number of units sold"},
+                "sale_amount": {"type": "number", "description": "Total revenue from the sale"},
+                "cost_amount": {"type": "number", "description": "Total cost price. Use 0 if not mentioned — system will ask."},
+            }, "required": ["item", "quantity", "sale_amount", "cost_amount"]},
+        ),
+        FunctionDeclaration(
+            name="split_payment",
+            description="Record a transaction where the customer paid part in cash and owes the rest on credit.",
+            parameters={"type": "object", "properties": {
+                "customer_name": {"type": "string"},
+                "customer_phone": {"type": "string"},
+                "customer_email": {"type": "string"},
+                "description": {"type": "string", "description": "What was purchased"},
+                "total_amount": {"type": "number"},
+                "cash_paid": {"type": "number", "description": "Amount paid in cash now"},
+                "balance_owed": {"type": "number", "description": "Amount still owed"},
+            }, "required": ["customer_name", "customer_phone", "description", "total_amount", "cash_paid", "balance_owed"]},
+        ),
+        FunctionDeclaration(
+            name="check_unpaid_invoices",
+            description="Show all unpaid invoices and customers who owe money.",
+            parameters={"type": "object", "properties": {}},
+        ),
+        FunctionDeclaration(
+            name="get_business_report",
+            description="Get today's sales report, revenue and profit summary.",
+            parameters={"type": "object", "properties": {}},
+        ),
+        FunctionDeclaration(
+            name="get_lifetime_business_report",
+            description="Get all-time lifetime business report including all sales and invoices.",
+            parameters={"type": "object", "properties": {}},
+        ),
+        FunctionDeclaration(
+            name="get_all_sales_summary",
+            description="Get summary of all sales ever recorded.",
+            parameters={"type": "object", "properties": {}},
+        ),
+        FunctionDeclaration(
+            name="mark_invoice_paid",
+            description="Mark an invoice as paid.",
+            parameters={"type": "object", "properties": {
+                "invoice_number": {"type": "string", "description": "Invoice number like INV-001"},
+            }, "required": ["invoice_number"]},
+        ),
+        FunctionDeclaration(
+            name="update_customer_email",
+            description="Update or add an email address for an existing customer.",
+            parameters={"type": "object", "properties": {
+                "customer_name": {"type": "string"},
+                "customer_phone": {"type": "string", "description": "Phone number to identify customer if name is ambiguous, else empty string"},
+                "customer_email": {"type": "string"},
+            }, "required": ["customer_name", "customer_email"]},
+        ),
+        FunctionDeclaration(
+            name="update_customer_phone",
+            description="Update or add a phone number for an existing customer.",
+            parameters={"type": "object", "properties": {
+                "customer_name": {"type": "string"},
+                "customer_phone": {"type": "string"},
+            }, "required": ["customer_name", "customer_phone"]},
+        ),
+        FunctionDeclaration(
+            name="resend_invoice",
+            description="Resend an invoice email to a customer.",
+            parameters={"type": "object", "properties": {
+                "invoice_number": {"type": "string"},
+            }, "required": ["invoice_number"]},
+        ),
+    ])
+
+    system_prompt = (
+        f"You are Prosper Assistant, a business assistant for Nigerian SMEs. "
+        f"Business: {business_name} (ID: {business_id}). "
+        f"Today's date: {__import__('datetime').datetime.now().strftime('%Y-%m-%d')}. "
+        f"Always respond in friendly Nigerian English (e.g. 'Sharp!', 'No wahala', 'Oga'). "
+        f"Extract all details from the user message and call the appropriate function. "
+        f"Phone numbers: normalize Nigerian numbers (08012345678 → +2348012345678). "
+        f"If cost price not mentioned for a sale, use 0 and the system will ask. "
+        f"Amounts like '20k' mean 20000."
     )
 
-    if is_split:
-        # Split payment: part cash + part credit
-        # e.g. "Tunde bought cement worth 70000, paid 50000 cash, owes 20000"
-        expanded = re.sub(r'(\d+(?:\.\d+)?)k\b', lambda m: str(int(float(m.group(1)) * 1000)), user_message, flags=re.IGNORECASE)
-        numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', expanded.replace(",", ""))
-        numbers = [float(n) for n in numbers]
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash", tools=[tools], system_instruction=system_prompt)
+        response = model.generate_content(user_message)
+        part = response.candidates[0].content.parts[0]
 
-        name_match = re.search(r'(?:from\s+|to\s+)?([A-Za-z]+)\s+(?:\+?[\d]+\s+)?(?:bought|paid|made)', user_message, re.IGNORECASE)
-        if not name_match:
-            name_match = re.search(r'([A-Za-z]+)\s+(?:\+?[\d]+\s+)?(?:bought|paid)', user_message, re.IGNORECASE)
+        if not hasattr(part, "function_call") or not part.function_call.name:
+            # No function call — plain conversational response
+            return JSONResponse({"response": part.text})
 
-        if not name_match or len(numbers) < 2:
-            result = "Please include the customer name and amounts. Example: 'Tunde bought cement worth 70000, paid 50000 cash, owes 20000'"
-        else:
-            customer_name = name_match.group(1).capitalize()
-            phone_in_msg = _extract_phone(user_message)
-            email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
-            customer_email = email_match.group(0) if email_match else None
+        fn = part.function_call.name
+        args = dict(part.function_call.args)
 
-            total_amount = max(numbers)
-            remaining = [n for n in numbers if n != total_amount]
+        # ── Execute the chosen function ──────────────────────────
+        if fn == "check_unpaid_invoices":
+            result = check_unpaid_invoices(business_id)
 
-            cash_match = re.search(r'paid\s+([\d,]+)', expanded, re.IGNORECASE)
-            owes_match = re.search(r'owes?\s+([\d,]+)|balance\s+([\d,]+)', expanded, re.IGNORECASE)
-            deposit_match = re.search(r'deposit\s+(?:of\s+)?([\d,]+)', expanded, re.IGNORECASE)
+        elif fn == "get_business_report":
+            result = get_business_report(business_id)
 
-            if cash_match:
-                cash_paid = float(cash_match.group(1).replace(",", ""))
-            elif deposit_match:
-                cash_paid = float(deposit_match.group(1).replace(",", ""))
-            elif remaining:
-                cash_paid = remaining[0]
-            else:
-                cash_paid = 0
+        elif fn == "get_lifetime_business_report":
+            result = get_lifetime_business_report(business_id)
 
-            if owes_match:
-                balance_owed = float((owes_match.group(1) or owes_match.group(2)).replace(",", ""))
-            else:
-                balance_owed = total_amount - cash_paid
+        elif fn == "get_all_sales_summary":
+            result = get_all_sales_summary(business_id)
 
-            item_match = re.search(r'(?:bought|sold)\s+(.+?)\s+(?:worth|for)', user_message, re.IGNORECASE)
-            description = item_match.group(1).strip() if item_match else "goods/services"
+        elif fn == "mark_invoice_paid":
+            result = mark_invoice_as_paid(args["invoice_number"].upper(), business_id)
 
-            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "", customer_email or "")
+        elif fn == "update_customer_phone":
+            phone = _extract_phone(args["customer_phone"]) or args["customer_phone"]
+            result = set_customer_phone(args["customer_name"], phone, business_id)
 
+        elif fn == "update_customer_email":
+            customer_name = args["customer_name"]
+            customer_email = args["customer_email"]
+            phone_in_msg = _extract_phone(args.get("customer_phone", "")) or args.get("customer_phone", "")
+            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg)
             if ambiguous:
                 options = "\n".join(
-                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
+                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone','no phone')}"
+                    for i, m in enumerate(matches)
+                )
+                result = f"I found {len(matches)} customers named {customer_name}:\n{options}\nInclude their phone number to specify."
+            elif not cust_doc:
+                result = f"No customer named {customer_name} found. Create an invoice for them first."
+            else:
+                db["customers"].update_one({"_id": cust_doc["_id"]}, {"$set": {"customer_email": customer_email}})
+                db["invoice"].update_many(
+                    {"customer_name": customer_name, "business_id": business_id, "customer_email": ""},
+                    {"$set": {"customer_email": customer_email}}
+                )
+                result = f"Updated! {customer_name}'s email is now {customer_email}."
+
+        elif fn == "resend_invoice":
+            inv_number = args["invoice_number"].upper()
+            inv = db["invoice"].find_one({"invoice_number": inv_number, "business_id": business_id})
+            if not inv:
+                result = f"Invoice {inv_number} not found."
+            elif not inv.get("customer_email"):
+                result = f"No email on file for {inv.get('customer_name')}. Add their email first."
+            else:
+                sent = send_invoice_email(inv["customer_name"], inv["customer_email"], inv_number, inv.get("items", []), inv["total_amount"], business_name)
+                result = f"Invoice {inv_number} resent to {inv['customer_email']}!" if sent else "Failed to send email. Please try again."
+
+        elif fn == "record_sale":
+            item = args["item"]
+            quantity = int(args.get("quantity", 1))
+            sale_amount = float(args["sale_amount"])
+            cost_amount = float(args.get("cost_amount", 0))
+            if cost_amount == 0:
+                db["pending_sales"].update_one(
+                    {"business_id": business_id},
+                    {"$set": {"business_id": business_id, "item": item, "quantity": quantity, "sale_amount": sale_amount}},
+                    upsert=True
+                )
+                result = f"Got it! {quantity} {item} sold for NGN {sale_amount:,.0f}. What was your cost price so I can calculate profit?"
+            else:
+                result = record_sale(item, quantity, sale_amount, cost_amount, business_id)
+
+        elif fn == "create_invoice":
+            customer_name = args["customer_name"]
+            customer_phone = _extract_phone(args.get("customer_phone", "")) or args.get("customer_phone", "")
+            customer_email = args.get("customer_email", "")
+            description = args["description"]
+            amount = float(args["amount"])
+
+            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, customer_phone, customer_email)
+            if ambiguous:
+                options = "\n".join(
+                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone','no phone')} | Email: {m.get('customer_email','no email')}"
+                    for i, m in enumerate(matches)
+                )
+                db["pending_disambig"].update_one(
+                    {"business_id": business_id},
+                    {"$set": {"business_id": business_id, "action": "invoice", "description": description, "amount": amount, "matches": matches}},
+                    upsert=True
+                )
+                result = f"I found {len(matches)} customers named {customer_name}. Which one?\n{options}\nReply with 1 or 2."
+            else:
+                if cust_doc:
+                    customer_phone = customer_phone or cust_doc.get("customer_phone", "")
+                    customer_email = customer_email or cust_doc.get("customer_email", "")
+                if not customer_phone:
+                    result = f"Please include {customer_name}'s phone number. Example: '{customer_name} 08012345678'"
+                elif customer_email:
+                    result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
+                else:
+                    invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
+                    result = f"Invoice {invoice_number} created for {customer_name} - NGN {amount:,.0f}. No email on file, so I didn't send it."
+
+        elif fn == "split_payment":
+            customer_name = args["customer_name"]
+            customer_phone = _extract_phone(args.get("customer_phone", "")) or args.get("customer_phone", "")
+            customer_email = args.get("customer_email", "")
+            description = args["description"]
+            total_amount = float(args["total_amount"])
+            cash_paid = float(args["cash_paid"])
+            balance_owed = float(args["balance_owed"])
+
+            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, customer_phone, customer_email)
+            if ambiguous:
+                options = "\n".join(
+                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone','no phone')}"
                     for i, m in enumerate(matches)
                 )
                 db["pending_disambig"].update_one(
@@ -359,234 +518,25 @@ async def chat_endpoint(request: Request):
                 result = f"I found {len(matches)} customers named {customer_name}. Which one?\n{options}\nReply with 1 or 2."
             else:
                 if cust_doc:
-                    phone_in_msg = phone_in_msg or cust_doc.get("customer_phone", "")
+                    customer_phone = customer_phone or cust_doc.get("customer_phone", "")
                     customer_email = customer_email or cust_doc.get("customer_email", "")
-
                 if cash_paid > 0:
                     log_sale(description, 1, cash_paid, cash_paid * 0.7, business_id)
-
                 if balance_owed > 0:
-                    if not phone_in_msg:
-                        result = f"Please include {customer_name}'s phone number for the balance invoice. Example: add '+2348012345678' to your message."
+                    if not customer_phone:
+                        result = f"Please include {customer_name}'s phone number for the balance invoice."
                     else:
-                        invoice_number = save_invoice(customer_name, customer_email or "", [{"description": f"{description} (balance)", "amount": balance_owed}], balance_owed, business_name, business_id, phone_in_msg)
+                        invoice_number = save_invoice(customer_name, customer_email or "", [{"description": f"{description} (balance)", "amount": balance_owed}], balance_owed, business_name, business_id, customer_phone)
                         result = f"Split payment recorded for {customer_name}!\n• Cash received: NGN {cash_paid:,.0f}\n• Balance invoice {invoice_number}: NGN {balance_owed:,.0f}\n• Total transaction: NGN {total_amount:,.0f}"
                 else:
                     result = f"Full payment of NGN {cash_paid:,.0f} recorded for {customer_name}."
 
-    elif "owe" in msg_lower or "unpaid" in msg_lower:
-        result = check_unpaid_invoices(business_id)
-
-    elif "today" in msg_lower and "report" in msg_lower:
-        result = get_business_report(business_id)
-
-    elif "lifetime" in msg_lower or "all time" in msg_lower or "overall" in msg_lower:
-        result = get_lifetime_business_report(business_id)
-
-    elif "all sales" in msg_lower or "all my sales" in msg_lower:
-        result = get_all_sales_summary(business_id)
-
-    elif "email" in msg_lower and ("update" in msg_lower or "is" in msg_lower or "add" in msg_lower or "set" in msg_lower):
-        email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
-        if not email_match:
-            result = "Please include the email address. Example: 'Bayo's email is bayo@gmail.com'"
         else:
-            customer_email = email_match.group(0)
-            name_match = re.search(r"([A-Za-z]+)['s]*\s+email", user_message, re.IGNORECASE)
-            if not name_match:
-                name_match = re.search(r"([A-Za-z]+)\s+(?:\+?[\d]+\s+)?email", user_message, re.IGNORECASE)
-            if not name_match:
-                name_match = re.search(r"(?:for|to|of)\s+([A-Za-z]+)", user_message, re.IGNORECASE)
-            if not name_match:
-                result = "Please mention the customer's name. Example: 'Bayo's email is bayo@gmail.com'"
-            else:
-                customer_name = name_match.group(1).capitalize()
-                phone_in_msg = _extract_phone(user_message)
-                cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "")
-                if ambiguous:
-                    options = "\n".join(
-                        f"  - {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
-                        for m in matches
-                    )
-                    result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nInclude their phone number to specify. Example: '{customer_name} 08012345678 email is {customer_email}'"
-                elif not cust_doc:
-                    result = f"I don't have {customer_name} in your customer list. Create an invoice for them first."
-                else:
-                    db["customers"].update_one(
-                        {"_id": cust_doc["_id"]} if "_id" in cust_doc else {"customer_name": customer_name, "business_id": business_id},
-                        {"$set": {"customer_email": customer_email}}
-                    )
-                    db["invoice"].update_many(
-                        {"customer_name": customer_name, "business_id": business_id, "customer_email": ""},
-                        {"$set": {"customer_email": customer_email}}
-                    )
-                    result = f"Updated! {customer_name}'s email is now {customer_email}."
+            result = "I'm not sure how to handle that. Try: 'Send invoice to Chidi for 50000' or 'Who owes me money?'"
 
-    elif "phone" in msg_lower and ("update" in msg_lower or "is" in msg_lower or "add" in msg_lower or "set" in msg_lower):
-        phone = _extract_phone(user_message)
-        if not phone:
-            result = "Please include the phone number. Example: 'Bayo's phone is 08012345678'"
-        else:
-            name_match = re.search(r"([A-Za-z]+)['s]*\s+phone", user_message, re.IGNORECASE)
-            if not name_match:
-                name_match = re.search(r"(?:for|to|of)\s+([A-Za-z]+)", user_message, re.IGNORECASE)
-            if not name_match:
-                result = "Please mention the customer's name. Example: 'Bayo's phone is 08012345678'"
-            else:
-                customer_name = name_match.group(1).capitalize()
-                result = set_customer_phone(customer_name, phone, business_id)
-
-    elif ("credit sale" in msg_lower) or ("on credit" in msg_lower):
-        numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', user_message.replace(",", ""))
-        numbers = [float(n) for n in numbers]
-        amount = numbers[-1] if numbers else 0
-
-        name_match = re.search(r'to\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth|\+?[\d])', user_message, re.IGNORECASE)
-        if not name_match:
-            name_match = re.search(r'to\s+([A-Za-z]+)', user_message, re.IGNORECASE)
-        if not name_match:
-            name_match = re.search(r'(?:^|\s)([A-Za-z]+)\s+(?:took|bought|owes)', user_message, re.IGNORECASE)
-
-        if not name_match:
-            result = "I couldn't find the customer's name. Try: 'Credit sale to Chidi for 50000'"
-        else:
-            customer_name = name_match.group(1).capitalize()
-            phone_in_msg = _extract_phone(user_message)
-            email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
-            customer_email = email_match.group(0) if email_match else None
-            item_match = re.search(r'(?:credit sale of|sold)\s+(.+?)\s+(?:worth|for|to)', user_message, re.IGNORECASE)
-            description = item_match.group(1).strip() if item_match else "items"
-
-            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "", customer_email or "")
-
-            if ambiguous:
-                options = "\n".join(
-                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
-                    for i, m in enumerate(matches)
-                )
-                db["pending_disambig"].update_one(
-                    {"business_id": business_id},
-                    {"$set": {"business_id": business_id, "action": "credit", "description": description, "amount": amount, "matches": matches}},
-                    upsert=True
-                )
-                result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nReply with 1 or 2 to select."
-            else:
-                customer_phone = phone_in_msg
-                if cust_doc:
-                    customer_phone = customer_phone or cust_doc.get("customer_phone", "")
-                    customer_email = customer_email or cust_doc.get("customer_email", "")
-
-                if not customer_phone:
-                    result = f"Please include {customer_name}'s phone number. Example: 'Credit sale to {customer_name} 08012345678 for 50000'"
-                elif customer_email:
-                    result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
-                else:
-                    invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
-                    result = f"Credit sale recorded! Invoice {invoice_number} for {customer_name} - NGN {amount:,}. No email on file so I didn't send it."
-
-    elif "sold" in msg_lower or "i sold" in msg_lower or "sale of" in msg_lower:
-        expanded = re.sub(r'(\d+(?:\.\d+)?)k\b', lambda m: str(int(float(m.group(1)) * 1000)), user_message, flags=re.IGNORECASE)
-        numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', expanded.replace(",", ""))
-        numbers = [float(n) for n in numbers]
-
-        if len(numbers) < 2:
-            result = "Please include quantity and amount. Example: 'Sold 10 biscuits for 5000'"
-        else:
-            quantity = int(numbers[0])
-            msg_lower_local = expanded.lower()
-
-            if "total" in msg_lower_local:
-                sale_amount = max(numbers[1:])
-            elif "each" in msg_lower_local and len(numbers) >= 2:
-                sale_amount = quantity * numbers[1]
-            else:
-                sale_amount = numbers[1]
-
-            item_match = re.search(r'(?:sold|sale of|sell)\s+\d+\s+([a-zA-Z\s]+?)(?:\s+for|\s+at|\s+worth|\s+total)', user_message, re.IGNORECASE)
-            item = item_match.group(1).strip() if item_match else "item"
-
-            if "cost" in msg_lower_local:
-                cost_numbers = [n for n in numbers if n != quantity and n != sale_amount]
-                cost_amount = cost_numbers[-1] if cost_numbers else sale_amount * 0.7
-                result = record_sale(item, quantity, sale_amount, cost_amount, business_id)
-            else:
-                db["pending_sales"].update_one(
-                    {"business_id": business_id},
-                    {"$set": {"business_id": business_id, "item": item, "quantity": quantity, "sale_amount": sale_amount}},
-                    upsert=True
-                )
-                result = f"Got it! {quantity} {item} sold for NGN {sale_amount:,}. What was your cost price so I can calculate profit?"
-
-    elif "mark" in msg_lower and "paid" in msg_lower:
-        inv_match = re.search(r'INV-\d+', user_message, re.IGNORECASE)
-        if not inv_match:
-            result = "Please include the invoice number. Example: 'Mark INV-009 as paid'"
-        else:
-            result = mark_invoice_as_paid(inv_match.group(0).upper(), business_id)
-
-    elif "invoice" in msg_lower or re.search(r'\bsend\s+inv\b', msg_lower):
-        numbers = re.findall(r'\d+(?:,\d+)*(?:\.\d+)?', user_message.replace(",", ""))
-        numbers = [float(n) for n in numbers]
-        amount = numbers[-1] if numbers else 0
-
-        if amount == 0:
-            result = "Please include an amount. Try: 'Send invoice to Chidi at chidi@gmail.com for 50000'"
-        else:
-            # Exclude reserved words that are not customer names
-            _reserved = {"inv", "invoice", "to", "for", "at", "the"}
-            name_match = re.search(r'to\s+([A-Za-z]+)\s+(?:took|bought|owes|at|for|worth|\+?[\d])', user_message, re.IGNORECASE)
-            if not name_match or name_match.group(1).lower() in _reserved:
-                name_match = re.search(r'to\s+([A-Za-z]+)', user_message, re.IGNORECASE)
-            if not name_match or name_match.group(1).lower() in _reserved:
-                name_match = re.search(r'(?:^|\s)([A-Za-z]+)\s+(?:took|bought|owes)', user_message, re.IGNORECASE)
-
-            if not name_match or name_match.group(1).lower() in _reserved:
-                result = "I couldn't find the customer's name. Try: 'Send invoice to Chidi for 50000'"
-            else:
-                customer_name = name_match.group(1).capitalize()
-                phone_in_msg = _extract_phone(user_message)
-                email_match = re.search(r'[\w\.-]+@[\w\.-]+', user_message)
-                customer_email = email_match.group(0) if email_match else None
-                item_match = re.search(r'for\s+(.+?)(?:\s+worth|\s+at|\s+for|$)', user_message, re.IGNORECASE)
-                description = item_match.group(1).strip() if item_match else "goods/services"
-
-                cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "", customer_email or "")
-
-                if ambiguous:
-                    options = "\n".join(
-                        f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone', 'no phone')} | Email: {m.get('customer_email', 'no email')}"
-                        for i, m in enumerate(matches)
-                    )
-                    db["pending_disambig"].update_one(
-                        {"business_id": business_id},
-                        {"$set": {"business_id": business_id, "action": "invoice", "description": description, "amount": amount, "matches": matches}},
-                        upsert=True
-                    )
-                    result = f"I found {len(matches)} customers named {customer_name}. Which one do you mean?\n{options}\nReply with 1 or 2 to select."
-                else:
-                    customer_phone = phone_in_msg
-                    if cust_doc:
-                        customer_phone = customer_phone or cust_doc.get("customer_phone", "")
-                        customer_email = customer_email or cust_doc.get("customer_email", "")
-
-                    if not customer_phone:
-                        result = f"Please include {customer_name}'s phone number. Example: 'Send invoice to {customer_name} 08012345678 for 50000'"
-                    elif customer_email:
-                        result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
-                    else:
-                        invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
-                        result = f"Invoice {invoice_number} created for {customer_name} - NGN {amount:,}. No email on file, so I didn't send it."
-
-    else:
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            prompt = f"You are Prosper Assistant for Nigerian SMEs. Use Nigerian English. User said: {user_message}. Respond helpfully and suggest: Who owes me money? Today report. Lifetime report."
-            response = model.generate_content(prompt)
-            result = response.text
-        except Exception:
-            result = "Hello oga! Try: 'Who owes me money?' or 'Show my lifetime report'"
+    except Exception as e:
+        logger.error("Gemini error: %s", e)
+        result = "Something went wrong. Please try again."
 
     return JSONResponse({"response": result})
 
