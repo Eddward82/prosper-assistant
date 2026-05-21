@@ -3,6 +3,11 @@ from agent_tools import save_invoice, get_unpaid_invoices, log_sale, send_invoic
 from dotenv import load_dotenv
 import os
 import re
+import logging
+import google.generativeai as genai
+from google.generativeai.types import FunctionDeclaration, Tool
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -236,8 +241,6 @@ async def register_business_endpoint(request: Request):
 
 async def chat_endpoint(request: Request):
     import json
-    import google.generativeai as genai
-    from google.generativeai.types import FunctionDeclaration, Tool
     body = await request.body()
     data = json.loads(body)
     user_message = data.get("message", "")
@@ -386,7 +389,7 @@ async def chat_endpoint(request: Request):
     )
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash", tools=[tools], system_instruction=system_prompt)
+        model = genai.GenerativeModel("gemini-2.0-flash", tools=[tools], system_instruction=system_prompt)
         response = model.generate_content(user_message)
 
         # Find the function call part if present
