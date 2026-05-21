@@ -294,7 +294,16 @@ async def chat_endpoint(request: Request):
             return JSONResponse({"response": result})
 
     # ── Intent routing ───────────────────────────────────────────
-    if "owe" in msg_lower or "unpaid" in msg_lower:
+    # Split payment check must come before "owe" check since messages contain "owes"
+    is_split = (
+        any(kw in msg_lower for kw in ["part payment", "paid cash", "owes", "deposit", "balance"]) and
+        any(kw in msg_lower for kw in ["bought", "worth", "for"]) and
+        any(kw in msg_lower for kw in ["paid", "deposit", "cash"])
+    )
+
+    if is_split:
+        pass  # fall through to split payment handler below
+    elif "owe" in msg_lower or "unpaid" in msg_lower:
         result = check_unpaid_invoices(business_id)
 
     elif "today" in msg_lower and "report" in msg_lower:
@@ -404,8 +413,7 @@ async def chat_endpoint(request: Request):
                     invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
                     result = f"Credit sale recorded! Invoice {invoice_number} for {customer_name} - NGN {amount:,}. No email on file so I didn't send it."
 
-    elif any(kw in msg_lower for kw in ["part payment", "paid cash", "owes", "deposit", "balance"]) and \
-         any(kw in msg_lower for kw in ["bought", "worth", "for"]):
+    elif is_split:
         # Split payment: part cash + part credit
         # e.g. "Tunde bought cement worth 70000, paid 50000 cash, owes 20000"
         expanded = re.sub(r'(\d+(?:\.\d+)?)k\b', lambda m: str(int(float(m.group(1)) * 1000)), user_message, flags=re.IGNORECASE)
