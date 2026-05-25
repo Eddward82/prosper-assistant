@@ -250,6 +250,37 @@ async def chat_endpoint(request: Request):
     business_name = profile.get("bizName", "Prosper Stores")
     db = get_db()
 
+    # ── Handle pending email action (user replied with phone number) ──
+    pending_email = db["pending_email"].find_one({"business_id": business_id})
+    if pending_email:
+        phone = _extract_phone(user_message)
+        if phone:
+            customer_name = pending_email["customer_name"]
+            customer_email = pending_email["customer_email"]
+            db["pending_email"].delete_one({"business_id": business_id})
+            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone)
+            if ambiguous:
+                options = "\n".join(
+                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone','no phone')}"
+                    for i, m in enumerate(matches)
+                )
+                result = f"I found {len(matches)} customers named {customer_name}:\n{options}\nReply with 1 or 2."
+            elif not cust_doc:
+                result = f"No customer named {customer_name} with that phone found."
+            else:
+                db["customers"].update_one({"_id": cust_doc["_id"]}, {"$set": {"customer_email": customer_email}})
+                db["invoice"].update_many(
+                    {"customer_name": customer_name, "business_id": business_id, "customer_email": ""},
+                    {"$set": {"customer_email": customer_email}}
+                )
+                inv = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
+                if inv:
+                    sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], business_name)
+                    result = f"Sharp! Email saved for {customer_name} and invoice {inv['invoice_number']} sent to {customer_email}!" if sent else f"Email saved for {customer_name} but couldn't send the invoice. Try again."
+                else:
+                    result = f"Email {customer_email} saved for {customer_name}. No invoice found to send."
+            return JSONResponse({"response": result})
+
     # ── Handle pending disambiguation (numbered selection) ──────
     pending_disambig = db["pending_disambig"].find_one({"business_id": business_id})
     if pending_disambig and user_message.strip() in ["1", "2", "3", "4"]:
@@ -459,27 +490,34 @@ async def chat_endpoint(request: Request):
                     for i, m in enumerate(matches)
                 )
                 result = f"I found {len(matches)} customers named {customer_name}:\n{options}\nInclude their phone number to specify."
+            elif not cust_doc and not phone_in_msg:
+                # No phone given and no unique customer found — save context and ask for phone
+                db["pending_email"].update_one(
+                    {"business_id": business_id},
+                    {"$set": {"business_id": business_id, "customer_name": customer_name, "customer_email": customer_email}},
+                    upsert=True
+                )
+                result = f"Abeg, what is {customer_name}'s phone number so I can identify them?"
             elif not cust_doc:
                 result = f"No customer named {customer_name} found. Create an invoice for them first."
             else:
+                db["pending_email"].delete_many({"business_id": business_id})
                 db["customers"].update_one({"_id": cust_doc["_id"]}, {"$set": {"customer_email": customer_email}})
                 db["invoice"].update_many(
                     {"customer_name": customer_name, "business_id": business_id, "customer_email": ""},
                     {"$set": {"customer_email": customer_email}}
                 )
-                result = f"Updated! {customer_name}'s email is now {customer_email}."
-                # If user also wants to send/resend an invoice, do it now
+                # Always try to send the most recent invoice after saving email
+                inv_to_send = None
                 if resend_inv:
-                    inv = db["invoice"].find_one({"invoice_number": resend_inv, "business_id": business_id})
-                    if inv:
-                        sent = send_invoice_email(customer_name, customer_email, resend_inv, inv.get("items", []), inv["total_amount"], business_name)
-                        result += f"\nInvoice {resend_inv} sent to {customer_email}!" if sent else f"\nEmail update saved but failed to send {resend_inv}."
-                    else:
-                        # Try sending the most recent invoice for this customer
-                        inv = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
-                        if inv:
-                            sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], business_name)
-                            result += f"\nInvoice {inv['invoice_number']} sent to {customer_email}!" if sent else f"\nEmail saved but could not send invoice."
+                    inv_to_send = db["invoice"].find_one({"invoice_number": resend_inv, "business_id": business_id})
+                if not inv_to_send:
+                    inv_to_send = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
+                if inv_to_send:
+                    sent = send_invoice_email(customer_name, customer_email, inv_to_send["invoice_number"], inv_to_send.get("items", []), inv_to_send["total_amount"], business_name)
+                    result = f"Sharp! Email saved for {customer_name} and invoice {inv_to_send['invoice_number']} sent to {customer_email}!" if sent else f"Email saved for {customer_name} but couldn't send invoice. Try 'resend {inv_to_send['invoice_number']}'."
+                else:
+                    result = f"Updated! {customer_name}'s email is now {customer_email}."
 
         elif fn == "resend_invoice":
             inv_number = args["invoice_number"].upper()
