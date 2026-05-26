@@ -866,32 +866,27 @@ function renderResponse(text) {
   return `<div class="msg bot">${cleanAmounts(text)}</div>`;
 }
 
-const chatHistory = [];
-
 async function send() {
   const i = document.getElementById("input");
   const t = i.value.trim();
   if (!t) return;
   const profile = JSON.parse(localStorage.getItem("prosperProfile") || "{}");
+  const business_id = (profile.bizName || "default").toLowerCase().replace(/ /g, "-");
   const m = document.getElementById("messages");
   m.innerHTML += `<div class="msg user">${t}</div>`;
   i.value = "";
   m.innerHTML += `<div class="msg bot typing" id="ld">Prosper is thinking...</div>`;
   m.scrollTop = m.scrollHeight;
   try {
-    const r = await fetch(API + "/api/chat", {
+    const r = await fetch(API + "/api/agent-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: t, profile: profile, history: chatHistory })
+      body: JSON.stringify({ message: t, profile: profile, session_id: business_id })
     });
     const d = await r.json();
     document.getElementById("ld").remove();
     m.insertAdjacentHTML("beforeend", renderResponse(d.response));
     m.scrollTop = m.scrollHeight;
-    // Keep last 10 turns in memory
-    chatHistory.push({ role: "user", text: t });
-    chatHistory.push({ role: "model", text: d.response });
-    if (chatHistory.length > 20) chatHistory.splice(0, 2);
     loadDash();
   } catch (e) { document.getElementById("ld").remove(); }
 }

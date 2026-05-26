@@ -708,10 +708,85 @@ async def sales_endpoint(request: Request):
     } for s in sales]})
 
 
+async def agent_chat_endpoint(request: Request):
+    """Proxy to Google Cloud Agent Builder (Dialogflow CX) with service account auth."""
+    import json
+    import uuid
+    import httpx
+    import google.auth
+    import google.auth.transport.requests
+
+    body = await request.body()
+    data = json.loads(body)
+    user_message = data.get("message", "")
+    profile = data.get("profile", {})
+    business_id = profile.get("bizName", "default").lower().replace(" ", "-")
+    business_name = profile.get("bizName", "Prosper Stores")
+
+    # Use business_id as session ID so each business has its own conversation
+    session_id = data.get("session_id") or business_id
+
+    project_id = os.getenv("AGENT_PROJECT_ID", "agentquest")
+    location = os.getenv("AGENT_LOCATION", "us-central1")
+    agent_id = os.getenv("AGENT_ID", "agent_1778083348344")
+
+    endpoint = (
+        f"https://{location}-dialogflow.googleapis.com/v3/"
+        f"projects/{project_id}/locations/{location}/agents/{agent_id}/"
+        f"sessions/{session_id}:detectIntent"
+    )
+
+    try:
+        # Get access token using Application Default Credentials (works on Cloud Run automatically)
+        credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        auth_req = google.auth.transport.requests.Request()
+        credentials.refresh(auth_req)
+        access_token = credentials.token
+
+        payload = {
+            "queryInput": {
+                "text": {"text": user_message},
+                "languageCode": "en"
+            },
+            "queryParams": {
+                "parameters": {
+                    "business_id": business_id,
+                    "business_name": business_name
+                }
+            }
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                endpoint,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }
+            )
+            resp.raise_for_status()
+            result = resp.json()
+
+        # Extract text responses from Agent Builder response
+        messages = result.get("queryResult", {}).get("responseMessages", [])
+        texts = []
+        for msg in messages:
+            if "text" in msg:
+                texts.extend(msg["text"].get("text", []))
+        response_text = "\n".join(t for t in texts if t)
+        return JSONResponse({"response": response_text or "No wahala! How can I help you?"})
+
+    except Exception as e:
+        logger.error("Agent Builder error: %s", e)
+        return JSONResponse({"response": f"Agent error: {str(e)}"}, status_code=500)
+
+
 app = mcp.http_app()
 app.routes.append(Route("/api/register", register_business_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/dashboard", dashboard_data, methods=["GET"]))
 app.routes.append(Route("/api/chat", chat_endpoint, methods=["POST", "OPTIONS"]))
+app.routes.append(Route("/api/agent-chat", agent_chat_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/customers", customers_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/sales", sales_endpoint, methods=["GET"]))
 app.add_middleware(
