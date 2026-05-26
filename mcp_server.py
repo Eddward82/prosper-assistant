@@ -709,12 +709,12 @@ async def sales_endpoint(request: Request):
 
 
 async def agent_chat_endpoint(request: Request):
-    """Proxy to Google Cloud Agent Builder (Dialogflow CX) with service account auth."""
+    """Run user message through ADK agent with per-business session memory."""
     import json
-    import uuid
-    import httpx
-    import google.auth
-    import google.auth.transport.requests
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.genai import types as genai_types
+    from agent import root_agent
 
     body = await request.body()
     data = json.loads(body)
@@ -722,59 +722,60 @@ async def agent_chat_endpoint(request: Request):
     profile = data.get("profile", {})
     business_id = profile.get("bizName", "default").lower().replace(" ", "-")
     business_name = profile.get("bizName", "Prosper Stores")
-
-    # Use business_id as session ID so each business has its own conversation
     session_id = data.get("session_id") or business_id
 
-    project_id = os.getenv("AGENT_PROJECT_ID", "agentquest")
-    location = os.getenv("AGENT_LOCATION", "us-central1")
-    agent_id = os.getenv("AGENT_ID", "agent_1778083348344")
-
-    endpoint = (
-        f"https://{location}-aiplatform.googleapis.com/v1/"
-        f"projects/{project_id}/locations/{location}/agents/{agent_id}/"
-        f"sessions/{session_id}:sendMessage"
-    )
-
     try:
-        credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        auth_req = google.auth.transport.requests.Request()
-        credentials.refresh(auth_req)
-        access_token = credentials.token
+        # Re-use or create session for this business
+        if not hasattr(agent_chat_endpoint, "_sessions"):
+            agent_chat_endpoint._sessions = InMemorySessionService()
+            agent_chat_endpoint._runners = {}
 
-        payload = {
-            "message": {
-                "text": {"text": user_message}
-            },
-            "parameters": {
-                "business_id": business_id,
-                "business_name": business_name
-            }
-        }
+        session_service = agent_chat_endpoint._sessions
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                endpoint,
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json"
-                }
+        # Get or create runner for this app
+        if "runner" not in agent_chat_endpoint._runners:
+            agent_chat_endpoint._runners["runner"] = Runner(
+                agent=root_agent,
+                app_name="prosper-assistant",
+                session_service=session_service,
             )
-            resp.raise_for_status()
-            result = resp.json()
+        runner = agent_chat_endpoint._runners["runner"]
 
-        # Extract text from Agent Platform response
-        texts = result.get("response", {}).get("message", {}).get("text", {}).get("text", [])
-        response_text = "\n".join(t for t in texts if t)
-        # If response format differs, log full result for debugging
-        if not response_text:
-            logger.info("Agent response raw: %s", result)
-            response_text = str(result)
-        return JSONResponse({"response": response_text})
+        # Get or create session for this business
+        try:
+            session = await session_service.get_session(
+                app_name="prosper-assistant",
+                user_id=business_id,
+                session_id=session_id,
+            )
+        except Exception:
+            session = await session_service.create_session(
+                app_name="prosper-assistant",
+                user_id=business_id,
+                session_id=session_id,
+                state={"business_id": business_id, "business_name": business_name},
+            )
+
+        # Run the agent
+        content = genai_types.Content(
+            role="user",
+            parts=[genai_types.Part(text=user_message)]
+        )
+        response_text = ""
+        async for event in runner.run_async(
+            user_id=business_id,
+            session_id=session_id,
+            new_message=content,
+        ):
+            if event.is_final_response():
+                for part in event.content.parts:
+                    if hasattr(part, "text") and part.text:
+                        response_text += part.text
+
+        return JSONResponse({"response": response_text or "No wahala! How can I help you?"})
 
     except Exception as e:
-        logger.error("Agent Builder error: %s", e)
+        logger.error("ADK agent error: %s", e)
         return JSONResponse({"response": f"Agent error: {str(e)}"}, status_code=500)
 
 
