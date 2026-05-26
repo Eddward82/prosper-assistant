@@ -318,6 +318,57 @@ async def chat_endpoint(request: Request):
             db["pending_sales"].delete_one({"business_id": business_id})
             return JSONResponse({"response": result})
 
+    # ── Direct handler: "send/email to NAME at EMAIL" ────────────
+    # Handle before Gemini to avoid conversational loops
+    direct_email_match = re.search(
+        r'(?:send|email|resend|forward)\s+(?:invoice\s+)?(?:to\s+)?([A-Za-z]+)\s+(?:at|@)\s+([\w\.-]+@[\w\.-]+)',
+        user_message, re.IGNORECASE
+    )
+    if not direct_email_match:
+        direct_email_match = re.search(
+            r'([A-Za-z]+)[\'s]*\s+email\s+(?:is\s+)?([\w\.-]+@[\w\.-]+)',
+            user_message, re.IGNORECASE
+        )
+    if direct_email_match:
+        customer_name = direct_email_match.group(1).capitalize()
+        customer_email = direct_email_match.group(2)
+        phone_in_msg = _extract_phone(user_message)
+        cust_doc, ambiguous, matches = find_customer(customer_name, business_id, phone_in_msg or "")
+        if ambiguous:
+            options = "\n".join(
+                f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone','no phone')}"
+                for i, m in enumerate(matches)
+            )
+            db["pending_email"].update_one(
+                {"business_id": business_id},
+                {"$set": {"business_id": business_id, "customer_name": customer_name, "customer_email": customer_email}},
+                upsert=True
+            )
+            return JSONResponse({"response": f"I found {len(matches)} customers named {customer_name}:\n{options}\nWhich one? Reply with 1 or 2."})
+        elif not cust_doc and not phone_in_msg:
+            db["pending_email"].update_one(
+                {"business_id": business_id},
+                {"$set": {"business_id": business_id, "customer_name": customer_name, "customer_email": customer_email}},
+                upsert=True
+            )
+            return JSONResponse({"response": f"Abeg, what is {customer_name}'s phone number so I can identify them?"})
+        elif not cust_doc:
+            return JSONResponse({"response": f"No customer named {customer_name} found. Create an invoice for them first."})
+        else:
+            db["pending_email"].delete_many({"business_id": business_id})
+            db["customers"].update_one({"_id": cust_doc["_id"]}, {"$set": {"customer_email": customer_email}})
+            db["invoice"].update_many(
+                {"customer_name": customer_name, "business_id": business_id, "customer_email": ""},
+                {"$set": {"customer_email": customer_email}}
+            )
+            inv = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
+            if inv:
+                sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], business_name)
+                result = f"Sharp! Email saved and invoice {inv['invoice_number']} sent to {customer_email}!" if sent else f"Email saved for {customer_name} but couldn't send invoice."
+            else:
+                result = f"Updated! {customer_name}'s email is now {customer_email}."
+            return JSONResponse({"response": result})
+
     # ── Gemini function-calling intent router ────────────────────
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
