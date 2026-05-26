@@ -731,28 +731,24 @@ async def agent_chat_endpoint(request: Request):
     agent_id = os.getenv("AGENT_ID", "agent_1778083348344")
 
     endpoint = (
-        f"https://{location}-dialogflow.googleapis.com/v3/"
+        f"https://{location}-aiplatform.googleapis.com/v1/"
         f"projects/{project_id}/locations/{location}/agents/{agent_id}/"
-        f"sessions/{session_id}:detectIntent"
+        f"sessions/{session_id}:sendMessage"
     )
 
     try:
-        # Get access token using Application Default Credentials (works on Cloud Run automatically)
         credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         auth_req = google.auth.transport.requests.Request()
         credentials.refresh(auth_req)
         access_token = credentials.token
 
         payload = {
-            "queryInput": {
-                "text": {"text": user_message},
-                "languageCode": "en"
+            "message": {
+                "text": {"text": user_message}
             },
-            "queryParams": {
-                "parameters": {
-                    "business_id": business_id,
-                    "business_name": business_name
-                }
+            "parameters": {
+                "business_id": business_id,
+                "business_name": business_name
             }
         }
 
@@ -768,14 +764,14 @@ async def agent_chat_endpoint(request: Request):
             resp.raise_for_status()
             result = resp.json()
 
-        # Extract text responses from Agent Builder response
-        messages = result.get("queryResult", {}).get("responseMessages", [])
-        texts = []
-        for msg in messages:
-            if "text" in msg:
-                texts.extend(msg["text"].get("text", []))
+        # Extract text from Agent Platform response
+        texts = result.get("response", {}).get("message", {}).get("text", {}).get("text", [])
         response_text = "\n".join(t for t in texts if t)
-        return JSONResponse({"response": response_text or "No wahala! How can I help you?"})
+        # If response format differs, log full result for debugging
+        if not response_text:
+            logger.info("Agent response raw: %s", result)
+            response_text = str(result)
+        return JSONResponse({"response": response_text})
 
     except Exception as e:
         logger.error("Agent Builder error: %s", e)
