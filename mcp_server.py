@@ -64,11 +64,15 @@ def record_sale(item: str, quantity: int, sale_amount: float, cost_amount: float
 
 
 @mcp.tool()
-def create_invoice(customer_name: str, customer_email: str, description: str, amount: float, business_name: str = "Prosper Stores", business_id: str = "default", customer_phone: str = "") -> str:
+def create_invoice(customer_name: str, customer_email: str, description: str, amount: float, business_name: str = "", business_id: str = "default", customer_phone: str = "") -> str:
     """Create and send an invoice to a customer via email for a specific business"""
+    db = get_db()
+    biz = db["businesses"].find_one({"business_id": business_id}) or {}
+    business_name = biz.get("business_name") or business_name or "Prosper Stores"
+    business_email = biz.get("business_email", "")
     items = [{"description": description, "amount": amount}]
     invoice_number = save_invoice(customer_name, customer_email, items, amount, business_name, business_id, customer_phone)
-    send_invoice_email(customer_name, customer_email, invoice_number, items, amount, business_name)
+    send_invoice_email(customer_name, customer_email, invoice_number, items, amount, business_name, business_email)
     return f"Invoice {invoice_number} created and emailed to {customer_email} for NGN {amount:,}"
 
 
@@ -135,6 +139,7 @@ def mark_invoice_as_paid(invoice_number: str, business_id: str = "default") -> s
     """Mark a specific invoice as paid for a specific business"""
     from datetime import datetime
     db = get_db()
+    invoice_number = invoice_number.upper().strip()
     invoice = db["invoice"].find_one({"invoice_number": invoice_number, "business_id": business_id})
     if not invoice:
         return f"Invoice {invoice_number} not found"
@@ -158,6 +163,23 @@ def mark_invoice_as_paid(invoice_number: str, business_id: str = "default") -> s
 
 
 @mcp.tool()
+def get_customers(business_id: str = "default") -> str:
+    """Get all customers with their phone numbers, emails, and balances for a specific business"""
+    db = get_db()
+    customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
+    if not customers:
+        return "No customers found."
+    result = f"Found {len(customers)} customers:\n"
+    for c in customers:
+        name = c.get("customer_name", "Unknown")
+        phone = c.get("customer_phone", "no phone")
+        email = c.get("customer_email", "no email")
+        balance = c.get("outstanding_balance", 0)
+        result += f"- {name} | Phone: {phone} | Email: {email} | Owes: NGN {balance:,}\n"
+    return result
+
+
+@mcp.tool()
 def set_customer_phone(customer_name: str, customer_phone: str, business_id: str = "default") -> str:
     """Update or add a phone number for an existing customer"""
     phone = _extract_phone(customer_phone) or customer_phone
@@ -174,6 +196,13 @@ from starlette.routing import Route
 from starlette.middleware.cors import CORSMiddleware
 
 
+def _get_business_info(business_id: str) -> tuple:
+    """Returns (business_name, business_email) from DB."""
+    biz = get_db()["businesses"].find_one({"business_id": business_id}) or {}
+    return biz.get("business_name", ""), biz.get("business_email", "")
+
+
+
 async def dashboard_data(request: Request):
     from datetime import datetime
     db = get_db()
@@ -182,7 +211,11 @@ async def dashboard_data(request: Request):
     todays_sales = list(db["sales"].find({"date": today, "business_id": business_id}, {"_id": 0}))
     all_sales = list(db["sales"].find({"business_id": business_id}, {"_id": 0}))
     all_invoices = list(db["invoice"].find({"business_id": business_id}, {"_id": 0}))
-    unpaid = [inv for inv in all_invoices if inv.get("status") == "unpaid"]
+    unpaid = sorted(
+        [inv for inv in all_invoices if inv.get("status") == "unpaid"],
+        key=lambda x: x.get("date_created", ""),
+        reverse=True
+    )[:50]
     customers = db["customers"].count_documents({"business_id": business_id})
     return JSONResponse({
         "today_revenue": sum(s["sale_amount"] for s in todays_sales),
@@ -275,7 +308,8 @@ async def chat_endpoint(request: Request):
                 )
                 inv = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
                 if inv:
-                    sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], business_name)
+                    _biz_name, _biz_email = _get_business_info(business_id)
+                    sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], _biz_name or business_name, _biz_email)
                     result = f"Sharp! Email saved for {customer_name} and invoice {inv['invoice_number']} sent to {customer_email}!" if sent else f"Email saved for {customer_name} but couldn't send the invoice. Try again."
                 else:
                     result = f"Email {customer_email} saved for {customer_name}. No invoice found to send."
@@ -363,7 +397,8 @@ async def chat_endpoint(request: Request):
             )
             inv = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
             if inv:
-                sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], business_name)
+                _biz_name, _biz_email = _get_business_info(business_id)
+                sent = send_invoice_email(customer_name, customer_email, inv["invoice_number"], inv.get("items", []), inv["total_amount"], _biz_name or business_name, _biz_email)
                 result = f"Sharp! Email saved and invoice {inv['invoice_number']} sent to {customer_email}!" if sent else f"Email saved for {customer_name} but couldn't send invoice."
             else:
                 result = f"Updated! {customer_name}'s email is now {customer_email}."
@@ -565,7 +600,8 @@ async def chat_endpoint(request: Request):
                 if not inv_to_send:
                     inv_to_send = db["invoice"].find_one({"customer_name": customer_name, "business_id": business_id}, sort=[("date_created", -1)])
                 if inv_to_send:
-                    sent = send_invoice_email(customer_name, customer_email, inv_to_send["invoice_number"], inv_to_send.get("items", []), inv_to_send["total_amount"], business_name)
+                    _biz_name, _biz_email = _get_business_info(business_id)
+                    sent = send_invoice_email(customer_name, customer_email, inv_to_send["invoice_number"], inv_to_send.get("items", []), inv_to_send["total_amount"], _biz_name or business_name, _biz_email)
                     result = f"Sharp! Email saved for {customer_name} and invoice {inv_to_send['invoice_number']} sent to {customer_email}!" if sent else f"Email saved for {customer_name} but couldn't send invoice. Try 'resend {inv_to_send['invoice_number']}'."
                 else:
                     result = f"Updated! {customer_name}'s email is now {customer_email}."
@@ -578,7 +614,8 @@ async def chat_endpoint(request: Request):
             elif not inv.get("customer_email"):
                 result = f"No email on file for {inv.get('customer_name')}. Add their email first."
             else:
-                sent = send_invoice_email(inv["customer_name"], inv["customer_email"], inv_number, inv.get("items", []), inv["total_amount"], business_name)
+                _biz_name, _biz_email = _get_business_info(business_id)
+                sent = send_invoice_email(inv["customer_name"], inv["customer_email"], inv_number, inv.get("items", []), inv["total_amount"], _biz_name or business_name, _biz_email)
                 result = f"Invoice {inv_number} resent to {inv['customer_email']}!" if sent else "Failed to send email. Please try again."
 
         elif fn == "record_sale":
@@ -742,13 +779,12 @@ async def agent_chat_endpoint(request: Request):
         runner = agent_chat_endpoint._runners["runner"]
 
         # Get or create session for this business
-        try:
-            session = await session_service.get_session(
-                app_name="prosper-assistant",
-                user_id=business_id,
-                session_id=session_id,
-            )
-        except Exception:
+        session = await session_service.get_session(
+            app_name="prosper-assistant",
+            user_id=business_id,
+            session_id=session_id,
+        )
+        if session is None:
             session = await session_service.create_session(
                 app_name="prosper-assistant",
                 user_id=business_id,
@@ -756,10 +792,15 @@ async def agent_chat_endpoint(request: Request):
                 state={"business_id": business_id, "business_name": business_name},
             )
 
+        # Inject business context so agent always passes the right business_id to tools
+        contextualized_message = (
+            f"[Business: {business_name} | business_id: {business_id}]\n{user_message}"
+        )
+
         # Run the agent
         content = genai_types.Content(
             role="user",
-            parts=[genai_types.Part(text=user_message)]
+            parts=[genai_types.Part(text=contextualized_message)]
         )
         response_text = ""
         async for event in runner.run_async(

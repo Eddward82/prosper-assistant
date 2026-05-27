@@ -3,9 +3,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import os
 import logging
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import httpx
 
 load_dotenv()
 
@@ -152,98 +150,96 @@ def update_customer_phone(customer_name, customer_phone, business_id="default"):
 
 
 # ── 6. EMAIL HELPERS ────────────────────────────────
-def _make_smtp_connection():
-    sender_email = os.getenv("GMAIL_USER")
-    sender_password = os.getenv("GMAIL_APP_PASSWORD")
-    server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-    server.login(sender_email, sender_password)
-    return server, sender_email
+RESEND_FROM = "Prosper Assistant <invoices@prosperassistant.online>"
 
 
-def send_invoice_email(customer_name, customer_email, invoice_number, items, total_amount, business_name):
+def _send_via_resend(to: str, subject: str, html: str, reply_to: str = "") -> bool:
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.error("RESEND_API_KEY not set")
+        return False
     try:
-        server, sender_email = _make_smtp_connection()
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Invoice {invoice_number} from {business_name}"
-        msg["From"] = sender_email
-        msg["To"] = customer_email
-
-        items_html = "".join(
-            f"<tr><td>{item['description']}</td><td>NGN {item['amount']:,}</td></tr>"
-            for item in items
+        payload = {"from": RESEND_FROM, "to": [to], "subject": subject, "html": html}
+        if reply_to:
+            payload["reply_to"] = [reply_to]
+        r = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=15,
         )
-        html = f"""<html><body>
-<h2>Invoice from {business_name}</h2>
-<p>Dear {customer_name},</p>
-<p>Please find your invoice below:</p>
-<table border='1' cellpadding='8'>
-  <tr><th>Description</th><th>Amount</th></tr>
-  {items_html}
-  <tr><td><strong>Total</strong></td><td><strong>NGN {total_amount:,}</strong></td></tr>
-</table>
-<p>Please make payment at your earliest convenience.</p>
-<p>Thank you for your business!</p>
-<p><strong>{business_name}</strong></p>
-</body></html>"""
-
-        msg.attach(MIMEText(html, "html"))
-        with server:
-            server.sendmail(sender_email, customer_email, msg.as_string())
-        logger.info("Invoice email sent to %s", customer_email)
-        return True
+        if r.status_code == 200 or r.status_code == 201:
+            logger.info("Email sent to %s via Resend", to)
+            return True
+        logger.error("Resend error %s: %s", r.status_code, r.text)
+        return False
     except Exception as e:
-        logger.error("Invoice email error: %s", e)
+        logger.error("Resend exception: %s", e)
         return False
 
 
-def send_reminder_email(customer_name, customer_email, invoice_number, total_amount, days_overdue):
-    try:
-        server, sender_email = _make_smtp_connection()
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Payment Reminder — Invoice {invoice_number}"
-        msg["From"] = sender_email
-        msg["To"] = customer_email
-
-        html = f"""<html><body>
-<h2>Payment Reminder</h2>
-<p>Dear {customer_name},</p>
-<p>This is a friendly reminder that invoice <strong>{invoice_number}</strong>
-for <strong>NGN {total_amount:,}</strong> is now <strong>{days_overdue} days overdue.</strong></p>
-<p>Please make payment as soon as possible.</p>
-<p>If you have already made payment, please disregard this message.</p>
-<p>Thank you.</p>
+def send_invoice_email(customer_name, customer_email, invoice_number, items, total_amount, business_name, business_email=""):
+    items_html = "".join(
+        f"<tr><td style='padding:8px;border-bottom:1px solid #eee'>{item['description']}</td>"
+        f"<td style='padding:8px;border-bottom:1px solid #eee;text-align:right'>NGN {item['amount']:,}</td></tr>"
+        for item in items
+    )
+    contact_line = f"<p>To contact us, reply to this email or reach us at <a href='mailto:{business_email}'>{business_email}</a>.</p>" if business_email else ""
+    html = f"""<html><body style='font-family:Arial,sans-serif;color:#1a1a2e;max-width:600px;margin:auto'>
+<div style='background:#0d3d26;padding:24px;border-radius:8px 8px 0 0'>
+  <h1 style='color:white;margin:0;font-size:22px'>Invoice from {business_name}</h1>
+</div>
+<div style='padding:24px;border:1px solid #e8eaed;border-top:none;border-radius:0 0 8px 8px'>
+  <p>Dear <strong>{customer_name}</strong>,</p>
+  <p>Please find your invoice details below:</p>
+  <table style='width:100%;border-collapse:collapse;margin:16px 0'>
+    <thead><tr style='background:#f1f5f9'>
+      <th style='padding:10px;text-align:left'>Description</th>
+      <th style='padding:10px;text-align:right'>Amount</th>
+    </tr></thead>
+    <tbody>{items_html}</tbody>
+    <tfoot><tr style='background:#0d3d26;color:white'>
+      <td style='padding:10px;font-weight:bold'>Total</td>
+      <td style='padding:10px;text-align:right;font-weight:bold'>NGN {total_amount:,}</td>
+    </tr></tfoot>
+  </table>
+  <p>Please make payment at your earliest convenience.</p>
+  {contact_line}
+  <p>Thank you for your business!</p>
+  <p style='color:#666;font-size:13px'>Powered by <strong>Prosper Assistant</strong> · prosperassistant.online</p>
+</div>
 </body></html>"""
+    return _send_via_resend(customer_email, f"Invoice {invoice_number} from {business_name}", html, reply_to=business_email)
 
-        msg.attach(MIMEText(html, "html"))
-        with server:
-            server.sendmail(sender_email, customer_email, msg.as_string())
-        logger.info("Reminder email sent to %s", customer_email)
-        return True
-    except Exception as e:
-        logger.error("Reminder email error: %s", e)
-        return False
+
+def send_reminder_email(customer_name, customer_email, invoice_number, total_amount, days_overdue, business_email=""):
+    html = f"""<html><body style='font-family:Arial,sans-serif;color:#1a1a2e;max-width:600px;margin:auto'>
+<div style='background:#0d3d26;padding:24px;border-radius:8px 8px 0 0'>
+  <h1 style='color:white;margin:0;font-size:22px'>Payment Reminder</h1>
+</div>
+<div style='padding:24px;border:1px solid #e8eaed;border-top:none;border-radius:0 0 8px 8px'>
+  <p>Dear <strong>{customer_name}</strong>,</p>
+  <p>This is a friendly reminder that invoice <strong>{invoice_number}</strong>
+  for <strong>NGN {total_amount:,}</strong> is now <strong>{days_overdue} days overdue.</strong></p>
+  <p>Please make payment as soon as possible.</p>
+  <p>If you have already made payment, please disregard this message.</p>
+  <p style='color:#666;font-size:13px'>Powered by <strong>Prosper Assistant</strong> · prosperassistant.online</p>
+</div>
+</body></html>"""
+    return _send_via_resend(customer_email, f"Payment Reminder — Invoice {invoice_number}", html, reply_to=business_email)
 
 
 def send_welcome_email(customer_name, customer_email, business_name):
-    try:
-        server, sender_email = _make_smtp_connection()
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Welcome! You're now a customer of {business_name}"
-        msg["From"] = sender_email
-        msg["To"] = customer_email
-
-        html = f"""<html><body>
-<h2>Welcome, {customer_name}!</h2>
-<p>You have been added as a customer of <strong>{business_name}</strong>.</p>
-<p>You will receive invoices and updates from us going forward.</p>
-<p>Thank you for your business!</p>
+    html = f"""<html><body style='font-family:Arial,sans-serif;color:#1a1a2e;max-width:600px;margin:auto'>
+<div style='background:#0d3d26;padding:24px;border-radius:8px 8px 0 0'>
+  <h1 style='color:white;margin:0;font-size:22px'>Welcome to {business_name}!</h1>
+</div>
+<div style='padding:24px;border:1px solid #e8eaed;border-top:none;border-radius:0 0 8px 8px'>
+  <p>Dear <strong>{customer_name}</strong>,</p>
+  <p>You have been added as a customer of <strong>{business_name}</strong>.</p>
+  <p>You will receive invoices and updates from us going forward.</p>
+  <p>Thank you for your business!</p>
+  <p style='color:#666;font-size:13px'>Powered by <strong>Prosper Assistant</strong> · prosperassistant.online</p>
+</div>
 </body></html>"""
-
-        msg.attach(MIMEText(html, "html"))
-        with server:
-            server.sendmail(sender_email, customer_email, msg.as_string())
-        logger.info("Welcome email sent to %s", customer_email)
-        return True
-    except Exception as e:
-        logger.error("Welcome email error: %s", e)
-        return False
+    return _send_via_resend(customer_email, f"Welcome! You're now a customer of {business_name}", html)
