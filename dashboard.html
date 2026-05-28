@@ -870,8 +870,18 @@ function toggleSidebar() {
 
 function resetProfile() {
   if (window._signOut) window._signOut().then(() => {
+    // Clear profile so auth screen shows cleanly for a different account
+    const uid = window._uid;
+    if (uid) localStorage.removeItem("prosperProfile_" + uid);
+    localStorage.removeItem("prosperProfile");
     localStorage.removeItem("prosperIsNew");
-    window.location.href = "index.html";
+    window._uid = null;
+    window._profile = null;
+    // Stay on dashboard so auth screen appears — user can pick any sign-in method
+    document.getElementById("authScreen").style.display = "flex";
+    document.getElementById("sidebarProfile").style.display = "none";
+    // Reset auth tabs to default (Google tab)
+    switchAuthTab("google");
   });
 }
 
