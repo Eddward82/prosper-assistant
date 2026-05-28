@@ -239,6 +239,23 @@ async def dashboard_data(request: Request):
     })
 
 
+async def get_profile_endpoint(request: Request):
+    uid = request.query_params.get("uid", "").strip()
+    if not uid:
+        return JSONResponse({"error": "Missing uid"}, status_code=400)
+    db = get_db()
+    biz = db["businesses"].find_one({"business_id": uid}, {"_id": 0})
+    if not biz:
+        return JSONResponse({"found": False})
+    return JSONResponse({
+        "found": True,
+        "bizName": biz.get("business_name", ""),
+        "ownerName": biz.get("owner_name", ""),
+        "bizEmail": biz.get("business_email", ""),
+        "bizId": uid
+    })
+
+
 async def register_business_endpoint(request: Request):
     import json
     from datetime import datetime
@@ -822,6 +839,7 @@ async def agent_chat_endpoint(request: Request):
 
 
 app = mcp.http_app()
+app.routes.append(Route("/api/profile", get_profile_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/register", register_business_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/dashboard", dashboard_data, methods=["GET"]))
 app.routes.append(Route("/api/chat", chat_endpoint, methods=["POST", "OPTIONS"]))
