@@ -40,9 +40,11 @@ window.signInGoogle = async () => {
 };
 
 // Handle redirect result on page load
+let _redirectPending = true;
 getRedirectResult(auth).then(result => {
-  // onAuthStateChanged handles the rest if result is valid
+  _redirectPending = false;
 }).catch(e => {
+  _redirectPending = false;
   if (e.code && e.code !== "auth/null-user") showAuthError(e.message);
 });
 
@@ -134,20 +136,19 @@ function showAuthError(msg, color = "red") {
 }
 
 // ── Auth State Listener ─────────────────────────────────────
+let _authResolved = false;
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    // Logged in
+    _authResolved = true;
     document.getElementById("authScreen").style.display = "none";
     window._uid = user.uid;
     window._userEmail = user.email || "";
     window._userPhone = user.phoneNumber || "";
     window._displayName = user.displayName || "";
-    // Check localStorage first, then fall back to DB lookup
     const profileKey = "prosperProfile_" + user.uid;
     let profileRaw = localStorage.getItem(profileKey) || localStorage.getItem("prosperProfile");
     if (profileRaw) {
       const profile = JSON.parse(profileRaw);
-      // Migrate old key to UID-keyed key
       if (!localStorage.getItem(profileKey)) {
         profile.bizId = profile.bizId || (profile.bizName || "").toLowerCase().replace(/ /g, "-");
         localStorage.setItem(profileKey, JSON.stringify(profile));
@@ -169,12 +170,21 @@ onAuthStateChanged(auth, async (user) => {
       // Truly new user — show onboarding
       if (user.email) document.getElementById("bizEmail").value = user.email;
       if (user.displayName) document.getElementById("ownerName").value = user.displayName;
+      document.getElementById("authScreen").style.display = "none";
       document.getElementById("welcomeModal").style.display = "flex";
     }
   } else {
-    // Logged out — show auth screen
-    document.getElementById("authScreen").style.display = "flex";
-    document.getElementById("welcomeModal").style.display = "none";
+    // Only show auth screen if we're not mid-redirect and user hasn't been resolved yet
+    if (_authResolved) {
+      // This is a real sign-out
+      document.getElementById("authScreen").style.display = "flex";
+      document.getElementById("welcomeModal").style.display = "none";
+    } else if (!_redirectPending) {
+      // No redirect in flight and no user — show auth
+      document.getElementById("authScreen").style.display = "flex";
+      document.getElementById("welcomeModal").style.display = "none";
+    }
+    // else: redirect is pending, wait for getRedirectResult to resolve
   }
 });
 
