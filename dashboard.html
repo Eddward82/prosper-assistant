@@ -11,7 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBXu_aAo_ZF_YdV-GwiNJWNeOPdSTgicgM",
@@ -27,15 +27,22 @@ const auth = getAuth(app);
 window._auth = auth;
 window._signOut = () => signOut(auth);
 
-// ── Google Sign-In ──────────────────────────────────────────
+// ── Google Sign-In (redirect — no popup blocker issues) ─────
 window.signInGoogle = async () => {
   try {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
   } catch(e) {
-    if (e.code !== "auth/popup-closed-by-user") showAuthError(e.message);
+    showAuthError(e.message);
   }
 };
+
+// Handle redirect result on page load
+getRedirectResult(auth).then(result => {
+  // onAuthStateChanged handles the rest if result is valid
+}).catch(e => {
+  if (e.code && e.code !== "auth/null-user") showAuthError(e.message);
+});
 
 // ── Phone Sign-In ───────────────────────────────────────────
 window.sendOTP = async () => {
