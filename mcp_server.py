@@ -251,7 +251,8 @@ async def register_business_endpoint(request: Request):
     if not business_name or not owner_name or not business_email:
         return JSONResponse({"error": "Missing required fields"}, status_code=400)
 
-    business_id = business_name.lower().replace(" ", "-")
+    uid = data.get("uid", "").strip()
+    business_id = uid if uid else business_name.lower().replace(" ", "-")
     db = get_db()
 
     existing = db["businesses"].find_one({"business_id": business_id})
