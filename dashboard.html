@@ -194,6 +194,11 @@ window.showDashboard = function(profile) {
   if (!profile) profile = window._profile;
   if (!profile) return;
   window._profile = profile;
+  // Always save to localStorage so loadProfile can find it
+  const uid = window._uid;
+  const key = uid ? "prosperProfile_" + uid : "prosperProfile";
+  localStorage.setItem(key, JSON.stringify(profile));
+  // Populate sidebar directly
   document.getElementById("sidebarBizName").textContent = profile.bizName || "";
   document.getElementById("sidebarOwnerName").textContent = profile.ownerName || "";
   document.getElementById("profileAvatar").textContent = (profile.bizName || "?").charAt(0).toUpperCase();
