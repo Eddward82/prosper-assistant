@@ -11,11 +11,11 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBXu_aAo_ZF_YdV-GwiNJWNeOPdSTgicgM",
-  authDomain: "agentquest.firebaseapp.com",
+  authDomain: "prosperassistant.online",
   projectId: "agentquest",
   storageBucket: "agentquest.firebasestorage.app",
   messagingSenderId: "666245775274",
@@ -33,17 +33,20 @@ window.signInGoogle = async () => {
   try {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
   } catch(e) {
-    if (e.code === "auth/popup-blocked") {
-      showAuthError("Popup blocked — please allow popups for this site and try again.");
-    } else if (e.code !== "auth/popup-closed-by-user") {
-      showAuthError(e.message);
-    }
+    showAuthError(e.message);
   }
 };
 
-let _redirectPending = false;
+// Handle redirect result on page load
+let _redirectPending = true;
+getRedirectResult(auth).then(() => {
+  _redirectPending = false;
+}).catch(e => {
+  _redirectPending = false;
+  if (e.code && e.code !== "auth/null-user") showAuthError(e.message);
+});
 
 // ── Phone Sign-In ───────────────────────────────────────────
 window.sendOTP = async () => {
