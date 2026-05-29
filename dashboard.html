@@ -812,7 +812,8 @@ function switchAuthTab(tab) {
 
 function loadProfile() {
   const uid = window._uid;
-  const p = uid ? localStorage.getItem("prosperProfile_" + uid) : localStorage.getItem("prosperProfile");
+  const raw = uid ? localStorage.getItem("prosperProfile_" + uid) : localStorage.getItem("prosperProfile");
+  const p = raw || (window._profile ? JSON.stringify(window._profile) : null);
   if (p) {
     const profile = JSON.parse(p);
     window._profile = profile;
