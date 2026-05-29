@@ -158,7 +158,8 @@ onAuthStateChanged(auth, async (user) => {
     } else {
       // Not in localStorage — check DB (e.g. new device / cleared cache)
       try {
-        const r = await fetch(API + "/api/profile?uid=" + user.uid);
+        const email = encodeURIComponent(user.email || "");
+        const r = await fetch(API + "/api/profile?uid=" + user.uid + "&email=" + email);
         const d = await r.json();
         if (d.found) {
           localStorage.setItem(profileKey, JSON.stringify(d));
