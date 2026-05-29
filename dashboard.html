@@ -147,11 +147,11 @@ onAuthStateChanged(auth, async (user) => {
     window._displayName = user.displayName || "";
     const profileKey = "prosperProfile_" + user.uid;
     let profileRaw = localStorage.getItem(profileKey) || localStorage.getItem("prosperProfile");
-    if (profileRaw) {
-      const profile = JSON.parse(profileRaw);
+    const parsedProfile = profileRaw ? JSON.parse(profileRaw) : null;
+    if (parsedProfile && parsedProfile.bizName) {
       if (!localStorage.getItem(profileKey)) {
-        profile.bizId = profile.bizId || (profile.bizName || "").toLowerCase().replace(/ /g, "-");
-        localStorage.setItem(profileKey, JSON.stringify(profile));
+        parsedProfile.bizId = parsedProfile.bizId || (parsedProfile.bizName || "").toLowerCase().replace(/ /g, "-");
+        localStorage.setItem(profileKey, JSON.stringify(parsedProfile));
       }
       const finalProfile = JSON.parse(localStorage.getItem(profileKey));
       showDashboard(finalProfile);
@@ -190,10 +190,12 @@ window.showDashboard = function(profile) {
   if (!profile) profile = window._profile;
   if (!profile) return;
   window._profile = profile;
-  // Always save to localStorage so loadProfile can find it
-  const uid = window._uid;
-  const key = uid ? "prosperProfile_" + uid : "prosperProfile";
-  localStorage.setItem(key, JSON.stringify(profile));
+  // Only save to localStorage if profile has actual data
+  if (profile.bizName) {
+    const uid = window._uid;
+    const key = uid ? "prosperProfile_" + uid : "prosperProfile";
+    localStorage.setItem(key, JSON.stringify(profile));
+  }
   // Populate sidebar directly
   document.getElementById("sidebarBizName").textContent = profile.bizName || "";
   document.getElementById("sidebarOwnerName").textContent = profile.ownerName || "";
