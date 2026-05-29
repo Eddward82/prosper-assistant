@@ -241,18 +241,21 @@ async def dashboard_data(request: Request):
 
 async def get_profile_endpoint(request: Request):
     uid = request.query_params.get("uid", "").strip()
-    email = request.query_params.get("email", "").strip()
+    biz_name = request.query_params.get("bizName", "").strip()
     if not uid:
         return JSONResponse({"error": "Missing uid"}, status_code=400)
     db = get_db()
     # Try by Firebase UID first
     biz = db["businesses"].find_one({"business_id": uid}, {"_id": 0})
-    # Fallback: try matching by business email (for pre-auth accounts)
-    if not biz and email:
-        biz = db["businesses"].find_one({"business_email": email}, {"_id": 0})
+    # Fallback: match by business name (exact, case-insensitive) for account recovery
+    if not biz and biz_name:
+        biz = db["businesses"].find_one(
+            {"business_name": {"$regex": f"^{biz_name}$", "$options": "i"}},
+            {"_id": 0}
+        )
     if not biz:
         return JSONResponse({"found": False})
-    # If found under old bizId, update it to use Firebase UID going forward
+    # If found under old bizId, migrate to Firebase UID going forward
     old_biz_id = biz.get("business_id", "")
     if old_biz_id != uid:
         db["businesses"].update_one({"business_id": old_biz_id}, {"$set": {"business_id": uid}})
