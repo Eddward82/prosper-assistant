@@ -187,10 +187,19 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-window.showDashboard = function(profileOverride) {
+window.showDashboard = function(profile) {
   document.getElementById("welcomeModal").style.display = "none";
-  if (profileOverride) window._profile = profileOverride;
-  loadProfile();
+  document.getElementById("authScreen").style.display = "none";
+  if (!profile) profile = window._profile;
+  if (!profile) return;
+  window._profile = profile;
+  // Directly populate sidebar — don't rely on loadProfile timing
+  document.getElementById("sidebarProfile").style.display = "block";
+  document.getElementById("sidebarBizName").textContent = profile.bizName || "";
+  document.getElementById("sidebarOwnerName").textContent = profile.ownerName || "";
+  document.getElementById("profileAvatar").textContent = (profile.bizName || "?").charAt(0).toUpperCase();
+  // Then call loadProfile for greeting and dashboard data
+  if (typeof loadProfile === "function") loadProfile();
 };
 </script>
 <style>
