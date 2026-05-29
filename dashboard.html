@@ -166,7 +166,9 @@ onAuthStateChanged(auth, async (user) => {
         }
       } catch(e) { console.error("Profile fetch error:", e); }
       // UID not found — show account recovery screen
+      _authResolved = true;
       document.getElementById("authScreen").style.display = "none";
+      document.getElementById("welcomeModal").style.display = "none";
       document.getElementById("recoveryScreen").style.display = "flex";
     }
   } else {
@@ -175,10 +177,12 @@ onAuthStateChanged(auth, async (user) => {
       // This is a real sign-out
       document.getElementById("authScreen").style.display = "flex";
       document.getElementById("welcomeModal").style.display = "none";
+      document.getElementById("recoveryScreen").style.display = "none";
     } else if (!_redirectPending) {
       // No redirect in flight and no user — show auth
       document.getElementById("authScreen").style.display = "flex";
       document.getElementById("welcomeModal").style.display = "none";
+      document.getElementById("recoveryScreen").style.display = "none";
     }
     // else: redirect is pending, wait for getRedirectResult to resolve
   }
