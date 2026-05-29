@@ -193,8 +193,6 @@ window.showDashboard = function(profile) {
   if (!profile) profile = window._profile;
   if (!profile) return;
   window._profile = profile;
-  // Directly populate sidebar — don't rely on loadProfile timing
-  document.getElementById("sidebarProfile").style.display = "block";
   document.getElementById("sidebarBizName").textContent = profile.bizName || "";
   document.getElementById("sidebarOwnerName").textContent = profile.ownerName || "";
   document.getElementById("profileAvatar").textContent = (profile.bizName || "?").charAt(0).toUpperCase();
@@ -672,7 +670,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 
     <div style="flex:1;"></div>
 
-    <div id="sidebarProfile" style="display:none;">
+    <div id="sidebarProfile">
       <div class="sidebar-profile">
         <div class="profile-avatar" id="profileAvatar">?</div>
         <div class="profile-info">
@@ -827,7 +825,6 @@ function loadProfile() {
   const profile = raw ? JSON.parse(raw) : window._profile;
   if (profile) {
     window._profile = profile;
-    document.getElementById("sidebarProfile").style.display = "block";
     document.getElementById("sidebarBizName").textContent = profile.bizName;
     document.getElementById("sidebarOwnerName").textContent = profile.ownerName;
     document.getElementById("profileAvatar").textContent = (profile.bizName || "?").charAt(0).toUpperCase();
