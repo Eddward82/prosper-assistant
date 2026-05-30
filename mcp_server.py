@@ -475,7 +475,9 @@ async def chat_endpoint(request: Request):
         FunctionDeclaration(
             name="check_unpaid_invoices",
             description="Show all unpaid invoices and customers who owe money.",
-            parameters={"type": "object", "properties": {}},
+            parameters={"type": "object", "properties": {
+                "business_id": {"type": "string", "description": "The business ID"}
+            }},
         ),
         FunctionDeclaration(
             name="get_business_report",
