@@ -789,8 +789,9 @@ async def agent_chat_endpoint(request: Request):
     data = json.loads(body)
     user_message = data.get("message", "")
     profile = data.get("profile", {})
-    business_id = profile.get("bizName", "default").lower().replace(" ", "-")
     business_name = profile.get("bizName", "Prosper Stores")
+    # Use bizId from profile (Firebase UID) if available, else fall back to name-based ID
+    business_id = profile.get("bizId") or data.get("session_id") or profile.get("bizName", "default").lower().replace(" ", "-")
     session_id = data.get("session_id") or business_id
 
     try:
