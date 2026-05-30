@@ -207,7 +207,7 @@ async def dashboard_data(request: Request):
     from datetime import datetime
     db = get_db()
     business_id = request.query_params.get("business_id", "default")
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = request.query_params.get("date") or datetime.now().strftime("%Y-%m-%d")
     todays_sales = list(db["sales"].find({"date": today, "business_id": business_id}, {"_id": 0}))
     all_sales = list(db["sales"].find({"business_id": business_id}, {"_id": 0}))
     all_invoices = list(db["invoice"].find({"business_id": business_id}, {"_id": 0}))
@@ -793,6 +793,11 @@ async def agent_chat_endpoint(request: Request):
     # Use bizId from profile (Firebase UID) if available, else fall back to name-based ID
     business_id = profile.get("bizId") or data.get("session_id") or profile.get("bizName", "default").lower().replace(" ", "-")
     session_id = data.get("session_id") or business_id
+    # Use client date if provided (avoids server timezone issues)
+    client_date = data.get("date")
+    if client_date:
+        import agent_tools
+        agent_tools._client_date = client_date
 
     try:
         # Re-use or create session for this business

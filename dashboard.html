@@ -970,7 +970,8 @@ function getBizId() {
 async function loadDash(retryCount = 0) {
   try {
     const bizId = getBizId();
-    const r = await fetch(API + "/api/dashboard?business_id=" + bizId);
+    const today = new Date().toISOString().split("T")[0];
+    const r = await fetch(API + "/api/dashboard?business_id=" + bizId + "&date=" + today);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     document.getElementById("tr").textContent = "NGN " + d.today_revenue.toLocaleString();
@@ -1259,7 +1260,7 @@ async function send() {
     const r = await fetch(API + "/api/agent-chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: t, profile: profile, session_id: business_id })
+      body: JSON.stringify({ message: t, profile: profile, session_id: business_id, date: new Date().toISOString().split("T")[0] })
     });
     const d = await r.json();
     document.getElementById("ld").remove();

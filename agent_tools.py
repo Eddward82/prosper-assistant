@@ -7,6 +7,12 @@ import httpx
 
 load_dotenv()
 
+# Client date override — set by mcp_server when client sends its date
+_client_date = None
+
+def _today():
+    return _client_date or datetime.now().strftime("%Y-%m-%d")
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -126,7 +132,7 @@ def log_sale(item, quantity, sale_amount, cost_amount, business_id="default"):
     profit = sale_amount - cost_amount
     db["sales"].insert_one({
         "business_id": business_id,
-        "date": datetime.now().strftime("%Y-%m-%d"),
+        "date": _today(),
         "item": item,
         "quantity": quantity,
         "sale_amount": sale_amount,
