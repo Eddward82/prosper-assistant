@@ -1238,6 +1238,34 @@ function renderResponse(text) {
     </div></div>`;
   }
 
+  // ── Customer list → table ────────────────────────────────────────
+  if (text.match(/\*\*(.+?)\*\*[\s\S]*?[Oo]we[s]?:/m) || text.match(/^[-•]\s*\*\*.+\*\*/m)) {
+    const customerBlocks = text.split(/\n(?=[-•*]\s*\*\*)/);
+    const rows = customerBlocks.map(block => {
+      const nameM = block.match(/\*\*(.+?)\*\*/);
+      const emailM = block.match(/[Ee]mail[:\s]+([^\s\n]+)/);
+      const owesM = block.match(/[Oo]we[s]?[:\s]+[₦N](?:GN\s*)?([\d,]+)/);
+      if (!nameM) return "";
+      const name = nameM[1];
+      const email = emailM ? `<div style="font-size:11px;color:#9ca3af">${emailM[1]}</div>` : "";
+      const owes = owesM ? `<span style="color:${owesM[1].replace(/,/g,"") === "0" ? "#22c55e" : "#f59e0b"};font-weight:600">NGN ${owesM[1]}</span>` : `<span style="color:#22c55e;font-weight:600">NGN 0</span>`;
+      return `<tr><td style="padding:8px 12px">${name}${email}</td><td style="padding:8px 12px;text-align:right">${owes}</td></tr>`;
+    }).filter(Boolean).join("");
+    if (rows) {
+      const intro = text.split(/\n[-•*]/)[0].trim();
+      return `<div class="msg bot">
+        <div style="margin-bottom:10px;font-size:13px">${intro}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="border-bottom:1px solid #e5e7eb">
+            <th style="padding:6px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">CUSTOMER</th>
+            <th style="padding:6px 12px;text-align:right;font-size:11px;color:#6b7280;font-weight:600">OWES</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }
+  }
+
   // ── Default: render markdown (handles tables, bold, lists, etc.) ─
   const html = typeof marked !== "undefined"
     ? marked.parse(cleanAmounts(text))
