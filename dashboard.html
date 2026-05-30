@@ -15,7 +15,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRe
 
 const firebaseConfig = {
   apiKey: "AIzaSyBXu_aAo_ZF_YdV-GwiNJWNeOPdSTgicgM",
-  authDomain: "prosperassistant.online",
+  authDomain: "agentquest.firebaseapp.com",
   projectId: "agentquest",
   storageBucket: "agentquest.firebasestorage.app",
   messagingSenderId: "666245775274",
@@ -33,20 +33,17 @@ window.signInGoogle = async () => {
   try {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
-    await signInWithRedirect(auth, provider);
+    await signInWithPopup(auth, provider);
   } catch(e) {
-    showAuthError(e.message);
+    if (e.code === "auth/popup-blocked") {
+      showAuthError("Popup blocked — click the address bar and allow popups for this site, then try again.");
+    } else if (e.code !== "auth/popup-closed-by-user") {
+      showAuthError(e.message);
+    }
   }
 };
 
-// Handle redirect result on page load
-let _redirectPending = true;
-getRedirectResult(auth).then(() => {
-  _redirectPending = false;
-}).catch(e => {
-  _redirectPending = false;
-  if (e.code && e.code !== "auth/null-user") showAuthError(e.message);
-});
+let _redirectPending = false;
 
 // ── Phone Sign-In ───────────────────────────────────────────
 window.sendOTP = async () => {
