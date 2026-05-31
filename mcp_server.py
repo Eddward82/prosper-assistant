@@ -480,6 +480,11 @@ async def chat_endpoint(request: Request):
             }},
         ),
         FunctionDeclaration(
+            name="get_all_customers",
+            description="Show all customers and their details including contact info and balances. Use when user asks to see customers, show customers, list customers, my customers, who are my customers.",
+            parameters={"type": "object", "properties": {}},
+        ),
+        FunctionDeclaration(
             name="get_business_report",
             description="Get today's sales report, revenue and profit summary.",
             parameters={"type": "object", "properties": {}},
@@ -577,7 +582,22 @@ async def chat_endpoint(request: Request):
             return JSONResponse({"response": plain_text or "No wahala! How can I help you today?"})
 
         # ── Execute the chosen function ──────────────────────────
-        if fn == "check_unpaid_invoices":
+        if fn == "get_all_customers":
+            db = get_db()
+            customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
+            if not customers:
+                result = "No customers found."
+            else:
+                result = f"Found {len(customers)} customers:\n"
+                for c in customers:
+                    name = c.get("customer_name", "Unknown")
+                    phone = c.get("customer_phone", "no phone")
+                    email = c.get("customer_email", "no email")
+                    balance = c.get("outstanding_balance", 0)
+                    paid = c.get("total_paid", 0)
+                    result += f"- **{name}** | Phone: {phone} | Email: {email} | Owes: NGN {balance:,} | Paid: NGN {paid:,}\n"
+
+        elif fn == "check_unpaid_invoices":
             result = check_unpaid_invoices(business_id)
 
         elif fn == "get_business_report":
