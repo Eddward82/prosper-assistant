@@ -1178,23 +1178,24 @@ function cleanAmounts(text) {
 
 function renderResponse(text) {
   // ── "Who owes me" response → table ──────────────────────────────
-  if (text.match(/unpaid invoice[s]?:/i) && text.match(/[-•*]\s*\*\*.+\*\*.*[₦N]/)) {
+  if (text.match(/ow(e|ing|es)/i) && text.match(/[-•*]\s*(\*\*)?[A-Z][a-z]/m) && text.match(/[₦N](?:GN)?\s*[\d,]+/)) {
     const lines = text.split("\n");
     const intro = lines[0];
     const rows = [];
     let total = "";
     for (const line of lines) {
-      const m = line.match(/[-•*]\s*\*\*(.+?)\*\*[:\s]+[₦N](?:GN\s*)?([\d,]+)(.*)/);
+      // Match both "- **Name**: Owes NGN X" and "- Name: Owes a total of NGN X"
+      const m = line.match(/[-•*]\s*\*?(\*?)(.+?)\*?\1[:\s]+(?:Owe[s]?\s+(?:a\s+total\s+of\s+)?|owes\s+)?[₦N](?:GN\s*)?([\d,]+)(.*)/i);
       if (m) {
-        const name = m[1];
-        const amount = "NGN " + m[2];
-        const note = m[3] ? m[3].replace(/\((.+?)\)/, '<span style="font-size:11px;color:#9ca3af">($1)</span>').trim() : "";
+        const name = m[2].replace(/\*/g, "").trim();
+        const amount = "NGN " + m[3];
+        const note = m[4] ? m[4].replace(/\((.+?)\)/, '<span style="font-size:11px;color:#9ca3af">($1)</span>').trim() : "";
         rows.push(`<tr style="border-bottom:1px solid #f3f4f6">
           <td style="padding:9px 12px;font-weight:600">${name} ${note}</td>
           <td style="padding:9px 12px;text-align:right;color:#f59e0b;font-weight:700">${amount}</td>
         </tr>`);
       }
-      if (line.match(/[Tt]otal.*owing/i)) total = line.replace(/\*\*/g, "");
+      if (line.match(/[Tt]otal.*owing|total.*owe/i)) total = line.replace(/\*\*/g, "").replace(/^[-•*]\s*/, "").trim();
     }
     if (rows.length) {
       return `<div class="msg bot">
