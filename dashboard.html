@@ -562,6 +562,27 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
   </div>
 </div>
 
+<!-- DELETE ACCOUNT MODAL -->
+<div id="deleteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:white;border-radius:16px;padding:28px 24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="width:44px;height:44px;background:#fee2e2;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    </div>
+    <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#1a1a2e;margin-bottom:8px;">Delete Account</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:6px;">This will permanently delete:</div>
+    <ul style="font-size:13px;color:#6b7280;padding-left:18px;margin-bottom:16px;">
+      <li>Your business profile</li>
+      <li>All invoices and sales records</li>
+      <li>All customer data</li>
+    </ul>
+    <div style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:16px;">This action cannot be undone.</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">Type <strong>DELETE</strong> to confirm:</div>
+    <input id="deleteConfirmInput" placeholder="Type DELETE" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;margin-bottom:12px;" oninput="this.style.borderColor=this.value==='DELETE'?'#dc2626':'#e2e8f0'">
+    <button onclick="executeDeleteAccount()" style="width:100%;padding:12px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;margin-bottom:8px;">Delete My Account</button>
+    <button onclick="document.getElementById('deleteModal').style.display='none'" style="width:100%;padding:12px;background:#f8fafc;color:#374151;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+
 <!-- ACCOUNT RECOVERY SCREEN -->
 <div id="recoveryScreen" style="display:none;position:fixed;inset:0;background:#f0f2f5;z-index:200;align-items:center;justify-content:center;padding:16px;">
   <div style="background:white;border-radius:20px;padding:36px 32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.12);">
@@ -711,9 +732,14 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
           <div class="profile-biz" id="sidebarBizName">—</div>
           <div class="profile-owner" id="sidebarOwnerName">—</div>
         </div>
-        <button onclick="resetProfile()" title="Sign Out" style="flex-shrink:0;background:transparent;border:none;color:rgba(255,255,255,0.3);padding:6px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" onmouseover="this.style.background='rgba(248,113,113,0.15)';this.style.color='#f87171'" onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.3)'">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-        </button>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <button onclick="resetProfile()" title="Sign Out" style="background:transparent;border:none;color:rgba(255,255,255,0.3);padding:5px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" onmouseover="this.style.background='rgba(248,113,113,0.15)';this.style.color='#f87171'" onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.3)'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+          <button onclick="confirmDeleteAccount()" title="Delete Account" style="background:transparent;border:none;color:rgba(255,255,255,0.2);padding:5px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;" onmouseover="this.style.background='rgba(248,113,113,0.15)';this.style.color='#f87171'" onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.2)'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -961,6 +987,41 @@ function obSkip() {
 function toggleSidebar() {
   document.querySelector(".sidebar").classList.toggle("open");
   document.getElementById("sidebarOverlay").classList.toggle("open");
+}
+
+function confirmDeleteAccount() {
+  document.getElementById("deleteConfirmInput").value = "";
+  document.getElementById("deleteModal").style.display = "flex";
+}
+
+async function executeDeleteAccount() {
+  const input = document.getElementById("deleteConfirmInput").value.trim();
+  if (input !== "DELETE") { toast("Type DELETE to confirm.", "error"); return; }
+  const uid = window._uid;
+  if (!uid) { toast("Not signed in.", "error"); return; }
+  try {
+    const r = await fetch(API + "/api/delete-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid })
+    });
+    const d = await r.json();
+    if (d.success) {
+      // Delete Firebase account
+      if (window._auth && window._auth.currentUser) {
+        await window._auth.currentUser.delete();
+      }
+      const key = "prosperProfile_" + uid;
+      localStorage.removeItem(key);
+      localStorage.removeItem("prosperProfile");
+      localStorage.removeItem("prosperIsNew");
+      window.location.href = "index.html";
+    } else {
+      toast("Failed to delete account. Try again.", "error");
+    }
+  } catch(e) {
+    toast("Error deleting account. Please try again.", "error");
+  }
 }
 
 function resetProfile() {

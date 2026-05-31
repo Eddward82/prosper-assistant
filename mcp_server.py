@@ -878,8 +878,26 @@ async def agent_chat_endpoint(request: Request):
         return JSONResponse({"response": f"Agent error: {str(e)}"}, status_code=500)
 
 
+async def delete_account_endpoint(request: Request):
+    import json
+    body = await request.body()
+    data = json.loads(body)
+    uid = data.get("uid", "").strip()
+    if not uid:
+        return JSONResponse({"error": "Missing uid"}, status_code=400)
+    db = get_db()
+    db["businesses"].delete_many({"business_id": uid})
+    db["invoice"].delete_many({"business_id": uid})
+    db["sales"].delete_many({"business_id": uid})
+    db["customers"].delete_many({"business_id": uid})
+    db["pending_sales"].delete_many({"business_id": uid})
+    db["pending_disambig"].delete_many({"business_id": uid})
+    return JSONResponse({"success": True})
+
+
 app = mcp.http_app()
 app.routes.append(Route("/api/profile", get_profile_endpoint, methods=["GET"]))
+app.routes.append(Route("/api/delete-account", delete_account_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/register", register_business_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/dashboard", dashboard_data, methods=["GET"]))
 app.routes.append(Route("/api/chat", chat_endpoint, methods=["POST", "OPTIONS"]))
