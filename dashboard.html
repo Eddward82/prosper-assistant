@@ -619,7 +619,11 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
     </ul>
     <div style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:16px;">This action cannot be undone.</div>
     <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">Type <strong>DELETE</strong> to confirm:</div>
-    <input id="deleteConfirmInput" placeholder="Type DELETE" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;margin-bottom:12px;" oninput="this.style.borderColor=this.value==='DELETE'?'#dc2626':'#e2e8f0'">
+    <input id="deleteConfirmInput" placeholder="Type DELETE" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;margin-bottom:8px;" oninput="this.style.borderColor=this.value==='DELETE'?'#dc2626':'#e2e8f0'">
+    <div id="deletePassField" style="display:none;margin-bottom:12px;">
+      <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">Enter your password to confirm:</div>
+      <input id="deletePassInput" type="password" placeholder="Your password" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;">
+    </div>
     <button onclick="executeDeleteAccount()" style="width:100%;padding:12px;background:#dc2626;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;margin-bottom:8px;">Delete My Account</button>
     <button onclick="document.getElementById('deleteModal').style.display='none'" style="width:100%;padding:12px;background:#f8fafc;color:#374151;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;">Cancel</button>
   </div>
@@ -1055,6 +1059,11 @@ function toggleSidebar() {
 
 function confirmDeleteAccount() {
   document.getElementById("deleteConfirmInput").value = "";
+  document.getElementById("deletePassInput").value = "";
+  // Show password field only for email users
+  const user = window._auth && window._auth.currentUser;
+  const isEmail = user && user.providerData.some(p => p.providerId === "password");
+  document.getElementById("deletePassField").style.display = isEmail ? "block" : "none";
   document.getElementById("deleteModal").style.display = "flex";
 }
 
@@ -1090,11 +1099,10 @@ async function executeDeleteAccount() {
           const provider = new GoogleAuthProvider();
           await reauthenticateWithPopup(user, provider);
         } else if (isEmail) {
-          const pass = prompt("Enter your password to confirm deletion:");
-          if (pass) {
-            const cred = EmailAuthProvider.credential(user.email, pass);
-            await reauthenticateWithCredential(user, cred);
-          }
+          const pass = document.getElementById("deletePassInput").value;
+          if (!pass) { toast("Enter your password to confirm.", "error"); return; }
+          const cred = EmailAuthProvider.credential(user.email, pass);
+          await reauthenticateWithCredential(user, cred);
         }
         await user.delete();
       }
