@@ -93,6 +93,11 @@ window.emailAuth = async (isSignUp) => {
   const email = document.getElementById("emailInput").value.trim();
   const pass  = document.getElementById("passInput").value;
   if (!email || !pass) return showAuthError("Enter email and password.");
+  if (isSignUp) {
+    const confirmPass = document.getElementById("confirmPassInput").value;
+    if (pass !== confirmPass) return showAuthError("Passwords do not match.");
+    if (pass.length < 6) return showAuthError("Password must be at least 6 characters.");
+  }
   try {
     if (isSignUp) {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
@@ -532,18 +537,42 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 
     <!-- Email panel -->
     <div id="panel-email" style="display:none;">
+      <!-- Toggle -->
+      <div style="display:flex;gap:0;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+        <button id="emailModeSignIn" onclick="setEmailMode('signin')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:#0d3d26;color:white;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">Sign In</button>
+        <button id="emailModeSignUp" onclick="setEmailMode('signup')" style="flex:1;padding:8px;font-size:13px;font-weight:600;border:none;background:#f8fafc;color:#6b7280;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;">Sign Up</button>
+      </div>
+      <!-- Name (sign up only) -->
+      <div id="nameField" style="display:none;margin-bottom:12px;">
+        <label style="display:block;font-size:11px;font-weight:700;margin-bottom:6px;color:#374151;text-transform:uppercase;letter-spacing:0.6px;">Full Name</label>
+        <input id="nameInput" type="text" placeholder="e.g. Amaka Johnson" style="width:100%;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='#16a34a'" onblur="this.style.borderColor='#e2e8f0'">
+      </div>
+      <!-- Email -->
       <div style="margin-bottom:12px;">
         <label style="display:block;font-size:11px;font-weight:700;margin-bottom:6px;color:#374151;text-transform:uppercase;letter-spacing:0.6px;">Email</label>
-        <input id="emailInput" type="email" placeholder="you@example.com" style="width:100%;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#16a34a'" onblur="this.style.borderColor='#e2e8f0'">
+        <input id="emailInput" type="email" placeholder="you@example.com" style="width:100%;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;" onfocus="this.style.borderColor='#16a34a'" onblur="this.style.borderColor='#e2e8f0'">
       </div>
-      <div style="margin-bottom:16px;">
+      <!-- Password -->
+      <div style="margin-bottom:12px;">
         <label style="display:block;font-size:11px;font-weight:700;margin-bottom:6px;color:#374151;text-transform:uppercase;letter-spacing:0.6px;">Password</label>
-        <input id="passInput" type="password" placeholder="Min. 6 characters" style="width:100%;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#16a34a'" onblur="this.style.borderColor='#e2e8f0'">
+        <div style="position:relative;">
+          <input id="passInput" type="password" placeholder="Min. 6 characters" style="width:100%;padding:12px 44px 12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#16a34a'" onblur="this.style.borderColor='#e2e8f0'">
+          <button type="button" onclick="togglePass('passInput','eyeIcon1')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;color:#9ca3af;">
+            <svg id="eyeIcon1" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </div>
-      <div style="display:flex;gap:8px;">
-        <button onclick="emailAuth(false)" style="flex:1;padding:13px;background:#0d3d26;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;">Sign In</button>
-        <button onclick="emailAuth(true)" style="flex:1;padding:13px;background:#f8fafc;color:#374151;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-weight:600;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;">Sign Up</button>
+      <!-- Confirm Password (sign up only) -->
+      <div id="confirmPassField" style="display:none;margin-bottom:16px;">
+        <label style="display:block;font-size:11px;font-weight:700;margin-bottom:6px;color:#374151;text-transform:uppercase;letter-spacing:0.6px;">Confirm Password</label>
+        <div style="position:relative;">
+          <input id="confirmPassInput" type="password" placeholder="Re-enter password" style="width:100%;padding:12px 44px 12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:'Plus Jakarta Sans',sans-serif;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#16a34a'" onblur="this.style.borderColor='#e2e8f0'">
+          <button type="button" onclick="togglePass('confirmPassInput','eyeIcon2')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;color:#9ca3af;">
+            <svg id="eyeIcon2" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </div>
+      <button id="emailSubmitBtn" onclick="emailAuth(false)" style="width:100%;padding:13px;background:#0d3d26;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;font-family:'Plus Jakarta Sans',sans-serif;cursor:pointer;">Sign In</button>
     </div>
 
     <!-- Verify email screen -->
@@ -899,6 +928,28 @@ function showNewUserOnboarding() {
     if (user.displayName) document.getElementById("ownerName").value = user.displayName;
   }
   document.getElementById("welcomeModal").style.display = "flex";
+}
+
+function setEmailMode(mode) {
+  const isSignUp = mode === "signup";
+  document.getElementById("nameField").style.display = isSignUp ? "block" : "none";
+  document.getElementById("confirmPassField").style.display = isSignUp ? "block" : "none";
+  document.getElementById("emailModeSignIn").style.background = isSignUp ? "#f8fafc" : "#0d3d26";
+  document.getElementById("emailModeSignIn").style.color = isSignUp ? "#6b7280" : "white";
+  document.getElementById("emailModeSignUp").style.background = isSignUp ? "#0d3d26" : "#f8fafc";
+  document.getElementById("emailModeSignUp").style.color = isSignUp ? "white" : "#6b7280";
+  document.getElementById("emailSubmitBtn").textContent = isSignUp ? "Create Account" : "Sign In";
+  document.getElementById("emailSubmitBtn").onclick = () => emailAuth(isSignUp);
+}
+
+function togglePass(inputId, iconId) {
+  const input = document.getElementById(inputId);
+  const isHidden = input.type === "password";
+  input.type = isHidden ? "text" : "password";
+  const icon = document.getElementById(iconId);
+  icon.innerHTML = isHidden
+    ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>'
+    : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
 }
 
 function switchAuthTab(tab) {
