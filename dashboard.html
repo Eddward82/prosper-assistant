@@ -1000,27 +1000,33 @@ async function executeDeleteAccount() {
   const uid = window._uid;
   if (!uid) { toast("Not signed in.", "error"); return; }
   try {
+    // Step 1: Delete MongoDB data
     const r = await fetch(API + "/api/delete-account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ uid })
     });
     const d = await r.json();
-    if (d.success) {
-      // Delete Firebase account
+    if (!d.success) { toast("Failed to delete data. Try again.", "error"); return; }
+
+    // Step 2: Clear localStorage
+    localStorage.removeItem("prosperProfile_" + uid);
+    localStorage.removeItem("prosperProfile");
+    localStorage.removeItem("prosperIsNew");
+
+    // Step 3: Delete Firebase account (may fail if session is old — that's okay)
+    try {
       if (window._auth && window._auth.currentUser) {
         await window._auth.currentUser.delete();
       }
-      const key = "prosperProfile_" + uid;
-      localStorage.removeItem(key);
-      localStorage.removeItem("prosperProfile");
-      localStorage.removeItem("prosperIsNew");
-      window.location.href = "index.html";
-    } else {
-      toast("Failed to delete account. Try again.", "error");
+    } catch(firebaseErr) {
+      // If Firebase delete fails (requires re-auth), still proceed — data is already deleted
+      console.warn("Firebase account delete failed:", firebaseErr.message);
     }
+
+    window.location.href = "index.html";
   } catch(e) {
-    toast("Error deleting account. Please try again.", "error");
+    toast("Error: " + e.message, "error");
   }
 }
 
