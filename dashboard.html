@@ -1024,7 +1024,7 @@ async function executeDeleteAccount() {
       console.warn("Firebase account delete failed:", firebaseErr.message);
     }
 
-    window.location.href = "index.html";
+    window.location.replace("/index.html");
   } catch(e) {
     toast("Error: " + e.message, "error");
   }
