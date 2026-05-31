@@ -102,11 +102,13 @@ window.emailAuth = async (isSignUp) => {
     if (isSignUp) {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await sendEmailVerification(cred.user);
+      _authResolved = false;
       await signOut(auth);
       showVerifyScreen(email);
     } else {
       const cred = await signInWithEmailAndPassword(auth, email, pass);
       if (!cred.user.emailVerified) {
+        _authResolved = false;
         await signOut(auth);
         showVerifyScreen(email, true);
         return;
@@ -134,6 +136,7 @@ window.resendVerification = async () => {
 };
 
 function showVerifyScreen(email, alreadySent = false) {
+  document.getElementById("authScreen").style.display = "flex";
   document.getElementById("panel-google").style.display = "none";
   document.getElementById("panel-phone").style.display = "none";
   document.getElementById("panel-email").style.display = "none";
