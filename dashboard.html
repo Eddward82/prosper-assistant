@@ -24,7 +24,7 @@
 </script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, onAuthStateChanged, signOut, sendEmailVerification, reauthenticateWithPopup, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBXu_aAo_ZF_YdV-GwiNJWNeOPdSTgicgM",
@@ -1014,13 +1014,27 @@ async function executeDeleteAccount() {
     localStorage.removeItem("prosperProfile");
     localStorage.removeItem("prosperIsNew");
 
-    // Step 3: Delete Firebase account (may fail if session is old — that's okay)
+    // Step 3: Delete Firebase account with re-authentication
     try {
-      if (window._auth && window._auth.currentUser) {
-        await window._auth.currentUser.delete();
+      const user = window._auth && window._auth.currentUser;
+      if (user) {
+        // Re-authenticate based on sign-in method
+        const providerData = user.providerData;
+        const isGoogle = providerData.some(p => p.providerId === "google.com");
+        const isEmail = providerData.some(p => p.providerId === "password");
+        if (isGoogle) {
+          const provider = new GoogleAuthProvider();
+          await reauthenticateWithPopup(user, provider);
+        } else if (isEmail) {
+          const pass = prompt("Enter your password to confirm deletion:");
+          if (pass) {
+            const cred = EmailAuthProvider.credential(user.email, pass);
+            await reauthenticateWithCredential(user, cred);
+          }
+        }
+        await user.delete();
       }
     } catch(firebaseErr) {
-      // If Firebase delete fails (requires re-auth), still proceed — data is already deleted
       console.warn("Firebase account delete failed:", firebaseErr.message);
     }
 
