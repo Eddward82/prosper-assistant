@@ -183,11 +183,21 @@ onAuthStateChanged(auth, async (user) => {
           return;
         }
       } catch(e) { console.error("Profile fetch error:", e); }
-      // UID not found — show account recovery screen
+      // UID not found — new user goes to onboarding, existing user goes to recovery
       _authResolved = true;
       document.getElementById("authScreen").style.display = "none";
-      document.getElementById("welcomeModal").style.display = "none";
-      document.getElementById("recoveryScreen").style.display = "flex";
+      document.getElementById("recoveryScreen").style.display = "none";
+      // If account was created within the last 5 minutes, it's a new user → onboarding
+      const createdAt = user.metadata && user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : 0;
+      const isNewUser = (Date.now() - createdAt) < 5 * 60 * 1000;
+      if (isNewUser) {
+        if (user.email) document.getElementById("bizEmail").value = user.email;
+        if (user.displayName) document.getElementById("ownerName").value = user.displayName;
+        document.getElementById("welcomeModal").style.display = "flex";
+      } else {
+        document.getElementById("welcomeModal").style.display = "none";
+        document.getElementById("recoveryScreen").style.display = "flex";
+      }
     }
   } else {
     // Only show auth screen if we're not mid-redirect and user hasn't been resolved yet
