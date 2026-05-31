@@ -9,6 +9,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+// Show auth screen immediately if no saved profile exists — avoids flicker for new visitors
+// while keeping the dashboard visible instantly for returning users
+(function() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith("prosperProfile"));
+  const hasProfile = keys.some(k => {
+    try { const p = JSON.parse(localStorage.getItem(k)); return p && p.bizName; } catch(e) { return false; }
+  });
+  if (!hasProfile) document.addEventListener("DOMContentLoaded", function() {
+    document.getElementById("authScreen").style.display = "flex";
+  });
+})();
+</script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signInWithPhoneNumber, createUserWithEmailAndPassword, signInWithEmailAndPassword, RecaptchaVerifier, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -471,7 +484,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 <body>
 
 <!-- AUTH SCREEN -->
-<div id="authScreen" style="display:flex;position:fixed;inset:0;background:#f0f2f5;z-index:200;align-items:center;justify-content:center;padding:16px;">
+<div id="authScreen" style="display:none;position:fixed;inset:0;background:#f0f2f5;z-index:200;align-items:center;justify-content:center;padding:16px;">
   <div style="background:white;border-radius:20px;padding:36px 32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.12);">
     <!-- Logo -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
