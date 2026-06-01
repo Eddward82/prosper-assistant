@@ -547,12 +547,8 @@ async def chat_endpoint(request: Request):
         f"7. Amounts like '20k' mean 20000.\n"
         f"8. If cost price not mentioned for a sale, use 0.\n"
         f"9. Respond in friendly Nigerian English only when NOT calling a function.\n"
-        f"10. FORMATTING RULES — always use this exact format:\n"
-        f"    - For who owes money: '- **NAME**: NGN AMOUNT (Invoice: INV-XXX)'\n"
-        f"    - For reports: '- **Total Revenue**: NGN AMOUNT' and '- **Total Profit**: NGN AMOUNT'\n"
-        f"    - For today report: '- **Cash Sales Today**: NGN AMOUNT' and '- **Profit**: NGN AMOUNT'\n"
-        f"    - Always bold customer names and labels with **text**\n"
-        f"    - Always use NGN prefix for amounts, never use ₦ symbol"
+        f"10. CRITICAL: When a function returns data, show it EXACTLY as returned — do NOT reword, summarize or reformat it. "
+        f"Just add a brief friendly intro line before the data, then show the raw function result unchanged."
     )
 
     try:
