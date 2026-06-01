@@ -161,7 +161,7 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     if (window._signingUp) return; // ignore during email sign-up flow
     _authResolved = true;
-    document.getElementById("authScreen").style.display = "none";
+    // Keep auth screen visible until we know where to send user
     window._uid = user.uid;
     window._userEmail = user.email || "";
     window._userPhone = user.phoneNumber || "";
@@ -175,6 +175,7 @@ onAuthStateChanged(auth, async (user) => {
         localStorage.setItem(profileKey, JSON.stringify(parsedProfile));
       }
       const finalProfile = JSON.parse(localStorage.getItem(profileKey));
+      document.getElementById("authScreen").style.display = "none";
       showDashboard(finalProfile);
     } else {
       // Not in localStorage — check DB by UID first
@@ -182,15 +183,14 @@ onAuthStateChanged(auth, async (user) => {
         const r = await fetch(API + "/api/profile?uid=" + user.uid);
         const d = await r.json();
         if (d.found) {
+          document.getElementById("authScreen").style.display = "none";
           showDashboard(d);
           return;
         }
       } catch(e) { console.error("Profile fetch error:", e); }
       // UID not found — new user goes to onboarding, existing user goes to recovery
-      _authResolved = true;
       document.getElementById("authScreen").style.display = "none";
       document.getElementById("recoveryScreen").style.display = "none";
-      // If account was created within the last 5 minutes, it's a new user → onboarding
       const createdAt = user.metadata && user.metadata.creationTime ? new Date(user.metadata.creationTime).getTime() : 0;
       const isNewUser = (Date.now() - createdAt) < 5 * 60 * 1000;
       if (isNewUser) {
@@ -222,6 +222,7 @@ onAuthStateChanged(auth, async (user) => {
 window.showDashboard = function(profile) {
   document.getElementById("welcomeModal").style.display = "none";
   document.getElementById("authScreen").style.display = "none";
+  document.getElementById("recoveryScreen").style.display = "none";
   if (!profile) profile = window._profile;
   if (!profile) return;
   window._profile = profile;
