@@ -588,28 +588,28 @@ async def chat_endpoint(request: Request):
             db = get_db()
             customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
             if not customers:
-                result = "No customers found."
-            else:
-                result = f"Found {len(customers)} customers:\n"
-                for c in customers:
-                    name = c.get("customer_name", "Unknown")
-                    phone = c.get("customer_phone", "no phone")
-                    email = c.get("customer_email", "no email")
-                    balance = c.get("outstanding_balance", 0)
-                    paid = c.get("total_paid", 0)
-                    result += f"- **{name}** | Phone: {phone} | Email: {email} | Owes: NGN {balance:,} | Paid: NGN {paid:,}\n"
+                return JSONResponse({"response": "No customers found yet. Create an invoice or record a sale to add customers."})
+            result = f"Found {len(customers)} customers:\n"
+            for c in customers:
+                name = c.get("customer_name", "Unknown")
+                phone = c.get("customer_phone", "no phone")
+                email = c.get("customer_email", "no email")
+                balance = c.get("outstanding_balance", 0)
+                paid = c.get("total_paid", 0)
+                result += f"- **{name}** | Phone: {phone} | Email: {email} | Owes: NGN {balance:,} | Paid: NGN {paid:,}\n"
+            return JSONResponse({"response": result})
 
         elif fn == "check_unpaid_invoices":
-            result = check_unpaid_invoices(business_id)
+            return JSONResponse({"response": check_unpaid_invoices(business_id)})
 
         elif fn == "get_business_report":
-            result = get_business_report(business_id)
+            return JSONResponse({"response": get_business_report(business_id)})
 
         elif fn == "get_lifetime_business_report":
-            result = get_lifetime_business_report(business_id)
+            return JSONResponse({"response": get_lifetime_business_report(business_id)})
 
         elif fn == "get_all_sales_summary":
-            result = get_all_sales_summary(business_id)
+            return JSONResponse({"response": get_all_sales_summary(business_id)})
 
         elif fn == "mark_invoice_paid":
             result = mark_invoice_as_paid(args["invoice_number"].upper(), business_id)
