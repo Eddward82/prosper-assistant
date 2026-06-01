@@ -1334,8 +1334,44 @@ function cleanAmounts(text) {
 }
 
 function renderResponse(text) {
+  // ── All customers list (pipe format) → table ────────────────────
+  if (text.match(/Found \d+ customers?:/i) && text.match(/\| Phone:.*\| Email:.*\| Owes:/)) {
+    const lines = text.split("\n");
+    const intro = lines[0];
+    const rows = [];
+    for (const line of lines) {
+      const m = line.match(/[-•*]\s*\*\*(.+?)\*\*\s*\|\s*Phone:\s*([^|]+)\|\s*Email:\s*([^|]+)\|\s*Owes:\s*NGN ([\d,]+)\s*\|\s*Paid:\s*NGN ([\d,]+)/);
+      if (m) {
+        const [, name, phone, email, owes, paid] = m;
+        const owesNum = parseInt(owes.replace(/,/g, ""));
+        const owesColor = owesNum > 0 ? "#f59e0b" : "#22c55e";
+        rows.push(`<tr style="border-bottom:1px solid #f3f4f6">
+          <td style="padding:9px 12px">
+            <div style="font-weight:600">${name.trim()}</div>
+            <div style="font-size:11px;color:#9ca3af">${phone.trim()} · ${email.trim()}</div>
+          </td>
+          <td style="padding:9px 12px;text-align:right;color:${owesColor};font-weight:700">NGN ${owes}</td>
+          <td style="padding:9px 12px;text-align:right;color:#22c55e;font-size:12px">NGN ${paid}</td>
+        </tr>`);
+      }
+    }
+    if (rows.length) {
+      return `<div class="msg bot">
+        <div style="font-size:13px;margin-bottom:10px">${intro}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+          <thead><tr style="background:#f9fafb">
+            <th style="padding:8px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">CUSTOMER</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6b7280;font-weight:600">OWES</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;color:#6b7280;font-weight:600">PAID</th>
+          </tr></thead>
+          <tbody>${rows.join("")}</tbody>
+        </table>
+      </div>`;
+    }
+  }
+
   // ── "Who owes me" response → table ──────────────────────────────
-  if (text.match(/ow(e|ing|es)/i) && text.match(/[-•*]\s*(\*\*)?[A-Z][a-z]/m) && text.match(/[₦N](?:GN)?\s*[\d,]+/)) {
+  if (text.match(/unpaid invoice/i) && text.match(/[-•*]\s*(\*\*)?[A-Z][a-z]/m) && text.match(/[₦N](?:GN)?\s*[\d,]+/)) {
     const lines = text.split("\n");
     const intro = lines[0];
     const rows = [];
