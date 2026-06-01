@@ -310,6 +310,10 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 .msg.bot.markdown-body{white-space:normal;}
 .markdown-body p{margin:0 0 6px;}
 .markdown-body p:last-child{margin-bottom:0;}
+.markdown-body ul{margin:6px 0;padding-left:18px;}
+.markdown-body ul li{margin-bottom:4px;line-height:1.5;}
+.markdown-body ul li strong{color:#0d3d26;}
+.markdown-body strong{color:#0d3d26;}
 .markdown-body ul,.markdown-body ol{padding-left:18px;margin:4px 0 6px;}
 .markdown-body li{margin-bottom:3px;}
 .markdown-body strong{font-weight:600;}
@@ -1477,53 +1481,6 @@ function renderResponse(text) {
   const hasBullets = text.match(/[-•*]\s+/m);
 
   // All sales summary (bullet format)
-  if (hasAmounts && hasBullets && text.match(/Total Revenue|Total Profit/i) && !text.match(/lifetime|Total Outstanding|Customers:/i)) {
-    const revM  = text.match(/Total Revenue[^₦\n]*[₦N](?:GN\s*)?([\d,]+)/i);
-    const profM = text.match(/Total Profit[^₦\n]*[₦N](?:GN\s*)?([\d,]+)/i);
-    const cntM  = text.match(/Total Sales Transactions[:\s]+(\d+)/i);
-    if (revM || profM) {
-      return `<div class="msg bot"><div class="chat-report">
-        <div class="rpt-title">All Sales Summary</div>
-        ${cntM  ? `<div class="rpt-row">Transactions: <b>${cntM[1]}</b></div>` : ''}
-        ${revM  ? `<div class="rpt-row">Total Revenue: <span class="rpt-amount">NGN ${revM[1]}</span></div>` : ''}
-        ${profM ? `<div class="rpt-row">Total Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>` : ''}
-      </div></div>`;
-    }
-  }
-
-  // Lifetime report (bullet format)
-  if (hasAmounts && hasBullets && text.match(/lifetime|Total Outstanding|Customers:/i)) {
-    const bizM   = text.match(/business[,\s]+([^:]+):/i);
-    const revM   = text.match(/Total Revenue[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
-    const profM  = text.match(/Total Profit[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
-    const outM   = text.match(/Total Outstanding[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
-    const custM  = text.match(/total of\s+(\d+)\s+customer/i) || text.match(/(\d+)\s+customer/i);
-    if (revM || profM) {
-      return `<div class="msg bot"><div class="chat-report">
-        <div class="rpt-title">Lifetime Report${bizM ? ' — ' + bizM[1].trim() : ''}</div>
-        ${revM  ? `<div class="rpt-row">Total Revenue: <span class="rpt-amount">NGN ${revM[1]}</span></div>` : ''}
-        ${profM ? `<div class="rpt-row">Total Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>` : ''}
-        ${outM  ? `<hr class="rpt-divider"><div class="rpt-row">Outstanding: <span class="rpt-warn">NGN ${outM[1]}</span></div>` : ''}
-        ${custM ? `<hr class="rpt-divider"><div class="rpt-row">Customers: <b>${custM[1]}</b></div>` : ''}
-      </div></div>`;
-    }
-  }
-
-  // Today/all-sales bullet format
-  if (hasAmounts && hasBullets && text.match(/Cash Sales|Money.*Owe|business report for today/i)) {
-    const cashM = text.match(/(?:Cash Sales.*?Revenue|Total Revenue)[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
-    const profM = text.match(/(?:Profit)[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
-    const oweM  = text.match(/(?:Outstanding|Owe)[^₦\n]*[₦N](?:GN\s*)?([\d,]+)/i);
-    const dateM = text.match(/today[,\s]+([^:]+):/i);
-    if (cashM || profM) {
-      return `<div class="msg bot"><div class="chat-report">
-        <div class="rpt-title">${dateM ? "Today's Report — " + dateM[1].trim() : "Sales Summary"}</div>
-        ${cashM ? `<div class="rpt-row">Revenue: <span class="rpt-amount">NGN ${cashM[1]}</span></div>` : ''}
-        ${profM ? `<div class="rpt-row">Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>` : ''}
-        ${oweM  ? `<hr class="rpt-divider"><div class="rpt-row">Outstanding: <span class="rpt-warn">NGN ${oweM[1]}</span></div>` : ''}
-      </div></div>`;
-    }
-  }
 
   // ── Sale recorded → formatted text ──────────────────────────────
   const saleM = text.match(/Sale recorded!?\s+(.+?)\s*\|\s*Revenue:\s*NGN ([\d,.-]+)\s*\|\s*Profit:\s*NGN ([\d,.-]+)/i);
