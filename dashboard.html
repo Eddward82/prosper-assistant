@@ -100,10 +100,12 @@ window.emailAuth = async (isSignUp) => {
   }
   try {
     if (isSignUp) {
+      _authResolved = false;
+      window._signingUp = true;
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       await sendEmailVerification(cred.user);
-      _authResolved = false;
       await signOut(auth);
+      window._signingUp = false;
       showVerifyScreen(email);
     } else {
       const cred = await signInWithEmailAndPassword(auth, email, pass);
@@ -157,6 +159,7 @@ function showAuthError(msg, color = "red") {
 let _authResolved = false;
 onAuthStateChanged(auth, async (user) => {
   if (user) {
+    if (window._signingUp) return; // ignore during email sign-up flow
     _authResolved = true;
     document.getElementById("authScreen").style.display = "none";
     window._uid = user.uid;
