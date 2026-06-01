@@ -1378,7 +1378,7 @@ function renderResponse(text) {
     let total = "";
     for (const line of lines) {
       // Match: "- **Name**: ₦X", "- Name: NGN X", "- **Name**: Owes NGN X"
-      const m = line.match(/[-•*]\s*\*{0,2}([^*:|\n]+?)\*{0,2}[:\s]+(?:Owe[s]?\s+(?:a\s+total\s+of\s+)?)?[₦N](?:GN\s*)?([\d,]+)(.*)/i);
+      const m = line.match(/[-•*]\s*\*{0,2}([^*:\n|]+?)\*{0,2}[:\s]+(?:Owe[s]?\s+(?:a\s+total\s+of\s+)?)?[₦N](?:GN\s*)?([\d,]+)(.*)/i);
       if (m) {
         const name = m[1].replace(/\*/g, "").trim();
         const amount = "NGN " + m[2];
@@ -1470,32 +1470,42 @@ function renderResponse(text) {
     </div></div>`;
   }
 
-  // ── AI "all sales" bullet format → formatted card ────────────────
-  if (text.match(/Total Sales Revenue/i) && text.match(/Total Profit/i)) {
-    const revM = text.match(/Total Sales Revenue[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
-    const profM = text.match(/Total Profit[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
-    if (revM && profM) {
+  // ── AI bullet-format reports → formatted cards ───────────────────
+  const hasAmounts = text.match(/[₦N](?:GN\s*)?[\d,]+/);
+  const hasBullets = text.match(/[-•*]\s+\*?\*?[A-Z]/m);
+
+  // Lifetime report (bullet format)
+  if (hasAmounts && hasBullets && text.match(/lifetime|Total Revenue|Total Profit|Total Outstanding|Customers:/i)) {
+    const bizM   = text.match(/business[,\s]+([^:]+):/i);
+    const revM   = text.match(/Total Revenue[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
+    const profM  = text.match(/Total Profit[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
+    const outM   = text.match(/Total Outstanding[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
+    const custM  = text.match(/total of\s+(\d+)\s+customer/i) || text.match(/(\d+)\s+customer/i);
+    if (revM || profM) {
       return `<div class="msg bot"><div class="chat-report">
-        <div class="rpt-title">All Sales Summary</div>
-        <div class="rpt-row">Total Revenue: <span class="rpt-amount">NGN ${revM[1]}</span></div>
-        <hr class="rpt-divider">
-        <div class="rpt-row">Total Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>
+        <div class="rpt-title">Lifetime Report${bizM ? ' — ' + bizM[1].trim() : ''}</div>
+        ${revM  ? `<div class="rpt-row">Total Revenue: <span class="rpt-amount">NGN ${revM[1]}</span></div>` : ''}
+        ${profM ? `<div class="rpt-row">Total Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>` : ''}
+        ${outM  ? `<hr class="rpt-divider"><div class="rpt-row">Outstanding: <span class="rpt-warn">NGN ${outM[1]}</span></div>` : ''}
+        ${custM ? `<hr class="rpt-divider"><div class="rpt-row">Customers: <b>${custM[1]}</b></div>` : ''}
       </div></div>`;
     }
   }
 
-  // ── AI "today's report" bullet format → formatted card ───────────
-  if (text.match(/Cash Sales Made Today/i) || text.match(/business report for today/i)) {
-    const cashM = text.match(/Cash Sales.*?[₦N](?:GN\s*)?([\d,]+)/i);
-    const profM = text.match(/Profit.*?[₦N](?:GN\s*)?([\d,]+)/i);
-    const oweM  = text.match(/(?:Money|People).*?Owe.*?[₦N](?:GN\s*)?([\d,]+)/i);
+  // Today/all-sales bullet format
+  if (hasAmounts && hasBullets && text.match(/Cash Sales|Money.*Owe|business report for today/i)) {
+    const cashM = text.match(/(?:Cash Sales.*?Revenue|Total Revenue)[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
+    const profM = text.match(/(?:Profit)[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
+    const oweM  = text.match(/(?:Outstanding|Owe)[^₦\n]*[₦N](?:GN\s*)?([\d,]+)/i);
     const dateM = text.match(/today[,\s]+([^:]+):/i);
-    return `<div class="msg bot"><div class="chat-report">
-      <div class="rpt-title">Today's Report${dateM ? ' — ' + dateM[1].trim() : ''}</div>
-      ${cashM ? `<div class="rpt-row">Cash Revenue: <span class="rpt-amount">NGN ${cashM[1]}</span></div>` : ''}
-      ${profM ? `<div class="rpt-row">Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>` : ''}
-      ${oweM  ? `<hr class="rpt-divider"><div class="rpt-row">Outstanding: <span class="rpt-warn">NGN ${oweM[1]}</span></div>` : ''}
-    </div></div>`;
+    if (cashM || profM) {
+      return `<div class="msg bot"><div class="chat-report">
+        <div class="rpt-title">${dateM ? "Today's Report — " + dateM[1].trim() : "Sales Summary"}</div>
+        ${cashM ? `<div class="rpt-row">Revenue: <span class="rpt-amount">NGN ${cashM[1]}</span></div>` : ''}
+        ${profM ? `<div class="rpt-row">Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>` : ''}
+        ${oweM  ? `<hr class="rpt-divider"><div class="rpt-row">Outstanding: <span class="rpt-warn">NGN ${oweM[1]}</span></div>` : ''}
+      </div></div>`;
+    }
   }
 
   // ── Sale recorded → formatted text ──────────────────────────────
