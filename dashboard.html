@@ -1335,7 +1335,7 @@ function cleanAmounts(text) {
 
 function renderResponse(text) {
   // ── All customers list (pipe format) → table ────────────────────
-  if (text.match(/Found \d+ customers?:/i) && text.match(/\| Phone:.*\| Email:.*\| Owes:/)) {
+  if (text.match(/\| Phone:.*\| Email:.*\| Owes:/)) {
     const lines = text.split("\n");
     const intro = lines[0];
     const rows = [];
@@ -1371,24 +1371,26 @@ function renderResponse(text) {
   }
 
   // ── "Who owes me" response → table ──────────────────────────────
-  if (text.match(/ow(e|es|ing)/i) && text.match(/[-•*]\s*(\*\*)?[A-Z][a-z]/m) && text.match(/[₦N](?:GN)?\s*[\d,]+/) && !text.match(/\| Phone:/)) {
+  if (text.match(/ow(e|es|ing)/i) && text.match(/[-•*]\s*\*\*[A-Z]/m) && text.match(/[₦N](?:GN)?\s*[\d,]+/) && !text.match(/\| Phone:/)) {
     const lines = text.split("\n");
     const intro = lines[0];
     const rows = [];
     let total = "";
     for (const line of lines) {
-      // Match: "- **Name**: ₦X", "- Name: NGN X", "- **Name**: Owes NGN X"
-      const m = line.match(/[-•*]\s*\*{0,2}([^*:\n|]+?)\*{0,2}[:\s]+(?:Owe[s]?\s+(?:a\s+total\s+of\s+)?)?[₦N](?:GN\s*)?([\d,]+)(.*)/i);
-      if (m) {
-        const name = m[1].replace(/\*/g, "").trim();
-        const amount = "NGN " + m[2];
-        const note = m[3] ? m[3].replace(/\((.+?)\)/, '<span style="font-size:11px;color:#9ca3af">($1)</span>').trim() : "";
+      // Extract the bold name first: **Name**
+      const nameM = line.match(/[-•*]\s*\*\*([^*]+)\*\*/);
+      const amtM  = line.match(/[₦N](?:GN\s*)?([\d,]+)/);
+      const invM  = line.match(/\(Invoice[:\s]+([^)]+)\)/i);
+      if (nameM && amtM) {
+        const name = nameM[1].trim();
+        const amount = "NGN " + amtM[1];
+        const inv = invM ? `<span style="font-size:11px;color:#9ca3af">${invM[1]}</span>` : "";
         rows.push(`<tr style="border-bottom:1px solid #f3f4f6">
-          <td style="padding:9px 12px;font-weight:600">${name} ${note}</td>
+          <td style="padding:9px 12px;font-weight:600">${name} ${inv}</td>
           <td style="padding:9px 12px;text-align:right;color:#f59e0b;font-weight:700">${amount}</td>
         </tr>`);
       }
-      if (line.match(/[Tt]otal.*owing|total.*owe/i)) total = line.replace(/\*\*/g, "").replace(/^[-•*]\s*/, "").trim();
+      if (line.match(/total.*ow/i) && amtM) total = line.replace(/\*\*/g,"").replace(/^[-•*]\s*/,"").trim();
     }
     if (rows.length) {
       return `<div class="msg bot">
