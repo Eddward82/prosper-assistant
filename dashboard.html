@@ -1474,10 +1474,25 @@ function renderResponse(text) {
 
   // ── AI bullet-format reports → formatted cards ───────────────────
   const hasAmounts = text.match(/[₦N](?:GN\s*)?[\d,]+/);
-  const hasBullets = text.match(/[-•*]\s+\*?\*?[A-Z]/m);
+  const hasBullets = text.match(/[-•*]\s+/m);
+
+  // All sales summary (bullet format)
+  if (hasAmounts && hasBullets && text.match(/Total Revenue|Total Profit/i) && !text.match(/lifetime|Total Outstanding|Customers:/i)) {
+    const revM  = text.match(/Total Revenue[^₦\n]*[₦N](?:GN\s*)?([\d,]+)/i);
+    const profM = text.match(/Total Profit[^₦\n]*[₦N](?:GN\s*)?([\d,]+)/i);
+    const cntM  = text.match(/Total Sales Transactions[:\s]+(\d+)/i);
+    if (revM || profM) {
+      return `<div class="msg bot"><div class="chat-report">
+        <div class="rpt-title">All Sales Summary</div>
+        ${cntM  ? `<div class="rpt-row">Transactions: <b>${cntM[1]}</b></div>` : ''}
+        ${revM  ? `<div class="rpt-row">Total Revenue: <span class="rpt-amount">NGN ${revM[1]}</span></div>` : ''}
+        ${profM ? `<div class="rpt-row">Total Profit: <span class="rpt-amount">NGN ${profM[1]}</span></div>` : ''}
+      </div></div>`;
+    }
+  }
 
   // Lifetime report (bullet format)
-  if (hasAmounts && hasBullets && text.match(/lifetime|Total Revenue|Total Profit|Total Outstanding|Customers:/i)) {
+  if (hasAmounts && hasBullets && text.match(/lifetime|Total Outstanding|Customers:/i)) {
     const bizM   = text.match(/business[,\s]+([^:]+):/i);
     const revM   = text.match(/Total Revenue[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
     const profM  = text.match(/Total Profit[:\s*]+[₦N](?:GN\s*)?([\d,]+)/i);
