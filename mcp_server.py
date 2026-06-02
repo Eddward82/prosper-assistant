@@ -94,12 +94,20 @@ def get_business_report(business_id: str = "default") -> str:
 def get_all_sales_summary(business_id: str = "default") -> str:
     """Get summary of ALL sales ever recorded for a specific business"""
     db = get_db()
-    all_sales = list(db["sales"].find({"business_id": business_id}, {"_id": 0}))
+    all_sales = list(db["sales"].find({"business_id": business_id}, {"_id": 0}, sort=[("date", -1)]))
     if not all_sales:
         return "No sales recorded yet."
     total_revenue = sum(s["sale_amount"] for s in all_sales)
     total_profit = sum(s["profit"] for s in all_sales)
-    return f"All-time: {len(all_sales)} sales, NGN {total_revenue:,} revenue, NGN {total_profit:,} profit"
+    lines = f"SALES-TABLE:{len(all_sales)} sales | Revenue: NGN {total_revenue:,.0f} | Profit: NGN {total_profit:,.0f}\n"
+    for s in all_sales:
+        date = s.get("date", "—")
+        item = s.get("item", "—")
+        qty = s.get("quantity", 1)
+        revenue = s.get("sale_amount", 0)
+        profit = s.get("profit", 0)
+        lines += f"ROW:{date}|{qty} {item}|NGN {revenue:,.0f}|NGN {profit:,.0f}\n"
+    return lines
 
 
 @mcp.tool()

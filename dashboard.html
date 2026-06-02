@@ -1342,6 +1342,40 @@ function cleanAmounts(text) {
 }
 
 function renderResponse(text) {
+  // ── Sales table (SALES-TABLE format) ────────────────────────────
+  if (text.startsWith("SALES-TABLE:")) {
+    const lines = text.trim().split("\n");
+    const summary = lines[0].replace("SALES-TABLE:", "");
+    const parts = summary.split("|").map(s => s.trim());
+    const count = parts[0];
+    const revenue = parts[1] || "";
+    const profit = parts[2] || "";
+    const rows = lines.slice(1).filter(l => l.startsWith("ROW:")).map(line => {
+      const [date, item, rev, prof] = line.replace("ROW:", "").split("|");
+      return `<tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:8px 12px;color:#6b7280;font-size:12px">${date}</td>
+        <td style="padding:8px 12px;font-weight:500">${item}</td>
+        <td style="padding:8px 12px;text-align:right;color:#22c55e;font-weight:600">${rev}</td>
+        <td style="padding:8px 12px;text-align:right;color:#0d3d26;font-size:12px">${prof}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="msg bot">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+        <div style="font-size:13px;font-weight:700;color:#1a1a2e">${count}</div>
+        <div style="font-size:12px;color:#6b7280">${revenue} &nbsp;·&nbsp; ${profit}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <thead><tr style="background:#f9fafb">
+          <th style="padding:7px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">DATE</th>
+          <th style="padding:7px 12px;text-align:left;font-size:11px;color:#6b7280;font-weight:600">ITEM</th>
+          <th style="padding:7px 12px;text-align:right;font-size:11px;color:#6b7280;font-weight:600">REVENUE</th>
+          <th style="padding:7px 12px;text-align:right;font-size:11px;color:#6b7280;font-weight:600">PROFIT</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
   // ── All customers list (pipe format) → table ────────────────────
   if (text.match(/\| Phone:.*\| Email:.*\| Owes:/)) {
     const lines = text.split("\n");
