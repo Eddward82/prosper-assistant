@@ -1605,7 +1605,12 @@ function toast(msg, type = "success", duration = 3000) {
 
 function quick(t) { document.getElementById("input").value = t; send(); }
 
-setInterval(() => { if (window._uid) loadDash(); }, 10000);
+setInterval(() => {
+  if (window._uid && document.visibilityState === "visible") loadDash();
+}, 10000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && window._uid) loadDash();
+});
 </script>
 </body>
 </html>

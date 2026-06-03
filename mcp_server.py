@@ -255,12 +255,20 @@ async def get_profile_endpoint(request: Request):
     db = get_db()
     # Try by Firebase UID first
     biz = db["businesses"].find_one({"business_id": uid}, {"_id": 0})
-    # Fallback: match by business name (exact, case-insensitive) for account recovery
+    # Fallback: match by business name (exact string match) for account recovery
     if not biz and biz_name:
         biz = db["businesses"].find_one(
-            {"business_name": {"$regex": f"^{biz_name}$", "$options": "i"}},
+            {"business_name": biz_name},
             {"_id": 0}
         )
+        # Try case-insensitive if exact fails
+        if not biz:
+            import re
+            safe_name = re.escape(biz_name)
+            biz = db["businesses"].find_one(
+                {"business_name": {"$regex": f"^{safe_name}$", "$options": "i"}},
+                {"_id": 0}
+            )
     if not biz:
         return JSONResponse({"found": False})
     # If found under old bizId, migrate to Firebase UID going forward
@@ -279,8 +287,11 @@ async def get_profile_endpoint(request: Request):
 async def register_business_endpoint(request: Request):
     import json
     from datetime import datetime
-    body = await request.body()
-    data = json.loads(body)
+    try:
+        body = await request.body()
+        data = json.loads(body)
+    except (json.JSONDecodeError, Exception):
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
     business_name = data.get("bizName", "").strip()
     owner_name = data.get("ownerName", "").strip()
     business_email = data.get("bizEmail", "").strip()
@@ -312,8 +323,11 @@ async def register_business_endpoint(request: Request):
 
 async def chat_endpoint(request: Request):
     import json
-    body = await request.body()
-    data = json.loads(body)
+    try:
+        body = await request.body()
+        data = json.loads(body)
+    except (json.JSONDecodeError, Exception):
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
     user_message = data.get("message", "")
     history = data.get("history", [])  # [{role, text}, ...]
     profile = data.get("profile", {})
@@ -752,7 +766,7 @@ async def chat_endpoint(request: Request):
                     customer_phone = customer_phone or cust_doc.get("customer_phone", "")
                     customer_email = customer_email or cust_doc.get("customer_email", "")
                 if cash_paid > 0:
-                    log_sale(description, 1, cash_paid, cash_paid * 0.7, business_id)
+                    log_sale(description, 1, cash_paid, 0, business_id)  # cost unknown for split payment cash portion
                 if balance_owed > 0:
                     if not customer_phone:
                         result = f"Please include {customer_name}'s phone number for the balance invoice."
@@ -767,7 +781,7 @@ async def chat_endpoint(request: Request):
 
     except Exception as e:
         logger.error("Gemini error: %s", e)
-        return JSONResponse({"response": f"Error: {str(e)}"})
+        return JSONResponse({"response": "Something went wrong. Please try again."})
 
     return JSONResponse({"response": result})
 
@@ -815,8 +829,11 @@ async def agent_chat_endpoint(request: Request):
     from google.genai import types as genai_types
     from agent import root_agent
 
-    body = await request.body()
-    data = json.loads(body)
+    try:
+        body = await request.body()
+        data = json.loads(body)
+    except (json.JSONDecodeError, Exception):
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
     user_message = data.get("message", "")
     profile = data.get("profile", {})
     business_name = profile.get("bizName", "Prosper Stores")
@@ -827,7 +844,7 @@ async def agent_chat_endpoint(request: Request):
     client_date = data.get("date")
     if client_date:
         import agent_tools
-        agent_tools._client_date = client_date
+        agent_tools.set_client_date(client_date)
 
     try:
         # Re-use or create session for this business
@@ -885,13 +902,16 @@ async def agent_chat_endpoint(request: Request):
 
     except Exception as e:
         logger.error("ADK agent error: %s", e)
-        return JSONResponse({"response": f"Agent error: {str(e)}"}, status_code=500)
+        return JSONResponse({"response": "Something went wrong. Please try again."}, status_code=500)
 
 
 async def delete_account_endpoint(request: Request):
     import json
-    body = await request.body()
-    data = json.loads(body)
+    try:
+        body = await request.body()
+        data = json.loads(body)
+    except (json.JSONDecodeError, Exception):
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
     uid = data.get("uid", "").strip()
     if not uid:
         return JSONResponse({"error": "Missing uid"}, status_code=400)
@@ -914,12 +934,20 @@ app.routes.append(Route("/api/chat", chat_endpoint, methods=["POST", "OPTIONS"])
 app.routes.append(Route("/api/agent-chat", agent_chat_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/customers", customers_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/sales", sales_endpoint, methods=["GET"]))
+ALLOWED_ORIGINS = [
+    "https://prosperassistant.online",
+    "https://www.prosperassistant.online",
+    "https://prosper-assistant.web.app",
+    "https://agentquest.web.app",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 if __name__ == "__main__":

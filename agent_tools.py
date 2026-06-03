@@ -7,11 +7,16 @@ import httpx
 
 load_dotenv()
 
-# Client date override — set by mcp_server when client sends its date
-_client_date = None
+import threading
+
+# Thread-local client date — safe under concurrent requests
+_local = threading.local()
+
+def set_client_date(date_str):
+    _local.client_date = date_str
 
 def _today():
-    return _client_date or datetime.now().strftime("%Y-%m-%d")
+    return getattr(_local, "client_date", None) or datetime.now().strftime("%Y-%m-%d")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
