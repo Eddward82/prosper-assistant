@@ -897,6 +897,7 @@ async def agent_chat_endpoint(request: Request):
     user_message = data.get("message", "")
     profile = data.get("profile", {})
     business_name = profile.get("bizName", "Prosper Stores")
+    owner_name = profile.get("ownerName", "")
     # Use bizId from profile (Firebase UID) if available, else fall back to name-based ID
     business_id = profile.get("bizId") or data.get("session_id") or profile.get("bizName", "default").lower().replace(" ", "-")
     session_id = data.get("session_id") or business_id
@@ -939,7 +940,7 @@ async def agent_chat_endpoint(request: Request):
 
         # Inject business context so agent always passes the right business_id to tools
         contextualized_message = (
-            f"[Business: {business_name} | business_id: {business_id}]\n{user_message}"
+            f"[Business: {business_name} | business_id: {business_id} | Owner: {owner_name}]\n{user_message}"
         )
 
         # Run the agent
