@@ -180,7 +180,8 @@ onAuthStateChanged(auth, async (user) => {
     } else {
       // Not in localStorage — check DB by UID first
       try {
-        const r = await fetch(API + "/api/profile?uid=" + user.uid);
+        const _tok = await user.getIdToken();
+        const r = await fetch(API + "/api/profile?uid=" + user.uid, { headers: { "Authorization": "Bearer " + _tok } });
         const d = await r.json();
         if (d.found) {
           document.getElementById("authScreen").style.display = "none";
@@ -930,6 +931,14 @@ function esc(s) {
   return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 
+async function authHeaders(json = true) {
+  const user = window._auth && window._auth.currentUser;
+  const h = json ? { "Content-Type": "application/json" } : {};
+  if (!user) return h;
+  try { h["Authorization"] = "Bearer " + await user.getIdToken(); } catch(e) {}
+  return h;
+}
+
 async function recoverAccount() {
   const bizName = document.getElementById("recoveryBizName").value.trim();
   if (!bizName) return;
@@ -937,7 +946,8 @@ async function recoverAccount() {
   errEl.style.display = "none";
   const uid = window._uid;
   try {
-    const r = await fetch(API + "/api/profile?uid=" + uid + "&bizName=" + encodeURIComponent(bizName));
+    const _h = await authHeaders(false);
+    const r = await fetch(API + "/api/profile?uid=" + uid + "&bizName=" + encodeURIComponent(bizName), { headers: _h });
     const d = await r.json();
     if (d.found) {
       document.getElementById("recoveryScreen").style.display = "none";
@@ -1053,9 +1063,10 @@ async function obNext(current) {
     localStorage.setItem(profileKey, JSON.stringify({ bizName, ownerName, bizEmail, bizId }));
     localStorage.setItem("prosperIsNew", "1");
     try {
+      const _rh = await authHeaders();
       await fetch(API + "/api/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: _rh,
         body: JSON.stringify({ bizName, ownerName, bizEmail, uid: bizId })
       });
     } catch (e) { console.error(e); }
@@ -1090,9 +1101,10 @@ async function executeDeleteAccount() {
   if (!uid) { toast("Not signed in.", "error"); return; }
   try {
     // Step 1: Delete MongoDB data
+    const _delh = await authHeaders();
     const r = await fetch(API + "/api/delete-account", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: _delh,
       body: JSON.stringify({ uid })
     });
     const d = await r.json();
@@ -1153,7 +1165,8 @@ async function loadDash(retryCount = 0) {
   try {
     const bizId = getBizId();
     const today = new Date().toISOString().split("T")[0];
-    const r = await fetch(API + "/api/dashboard?business_id=" + bizId + "&date=" + today);
+    const _dh = await authHeaders(false);
+    const r = await fetch(API + "/api/dashboard?business_id=" + bizId + "&date=" + today, { headers: _dh });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     document.getElementById("tr").textContent = "NGN " + d.today_revenue.toLocaleString();
@@ -1195,7 +1208,8 @@ function switchTab(name) {
 async function loadCustomers() {
   const bizId = getBizId();
   try {
-    const r = await fetch(API + "/api/customers?business_id=" + bizId);
+    const _ch = await authHeaders(false);
+    const r = await fetch(API + "/api/customers?business_id=" + bizId, { headers: _ch });
     const d = await r.json();
     const customers = d.customers || [];
     if (!customers.length) {
@@ -1227,7 +1241,8 @@ async function loadSales() {
   if (from) url += "&from=" + from;
   if (to) url += "&to=" + to;
   try {
-    const r = await fetch(url);
+    const _sh = await authHeaders(false);
+    const r = await fetch(url, { headers: _sh });
     const d = await r.json();
     const sales = d.sales || [];
     if (!sales.length) {
@@ -1580,9 +1595,10 @@ async function send() {
   m.innerHTML += `<div class="msg bot typing" id="ld">Prosper is thinking...</div>`;
   m.scrollTop = m.scrollHeight;
   try {
+    const _ah = await authHeaders();
     const r = await fetch(API + "/api/agent-chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: _ah,
       body: JSON.stringify({ message: t, profile: profile, session_id: business_id, date: new Date().toISOString().split("T")[0] })
     });
     const d = await r.json();

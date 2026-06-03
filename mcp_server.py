@@ -202,6 +202,23 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.middleware.cors import CORSMiddleware
+import asyncio
+import firebase_admin
+from firebase_admin import auth as fb_auth
+
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(options={"projectId": "agentquest"})
+
+
+async def _verify_token(request: Request) -> str | None:
+    header = request.headers.get("Authorization", "")
+    if not header.startswith("Bearer "):
+        return None
+    try:
+        decoded = await asyncio.to_thread(fb_auth.verify_id_token, header[7:])
+        return decoded["uid"]
+    except Exception:
+        return None
 
 
 def _get_business_info(business_id: str) -> tuple:
@@ -212,6 +229,9 @@ def _get_business_info(business_id: str) -> tuple:
 
 
 async def dashboard_data(request: Request):
+    uid = await _verify_token(request)
+    if uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     from datetime import datetime
     db = get_db()
     business_id = request.query_params.get("business_id", "default")
@@ -248,6 +268,9 @@ async def dashboard_data(request: Request):
 
 
 async def get_profile_endpoint(request: Request):
+    token_uid = await _verify_token(request)
+    if token_uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     uid = request.query_params.get("uid", "").strip()
     biz_name = request.query_params.get("bizName", "").strip()
     if not uid:
@@ -285,6 +308,9 @@ async def get_profile_endpoint(request: Request):
 
 
 async def register_business_endpoint(request: Request):
+    uid = await _verify_token(request)
+    if uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     import json
     from datetime import datetime
     try:
@@ -322,6 +348,9 @@ async def register_business_endpoint(request: Request):
 
 
 async def chat_endpoint(request: Request):
+    uid = await _verify_token(request)
+    if uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     import json
     try:
         body = await request.body()
@@ -787,6 +816,9 @@ async def chat_endpoint(request: Request):
 
 
 async def customers_endpoint(request: Request):
+    uid = await _verify_token(request)
+    if uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     db = get_db()
     business_id = request.query_params.get("business_id", "default")
     customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
@@ -801,6 +833,9 @@ async def customers_endpoint(request: Request):
 
 
 async def sales_endpoint(request: Request):
+    uid = await _verify_token(request)
+    if uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     db = get_db()
     business_id = request.query_params.get("business_id", "default")
     date_from = request.query_params.get("from", "")
@@ -823,6 +858,9 @@ async def sales_endpoint(request: Request):
 
 async def agent_chat_endpoint(request: Request):
     """Run user message through ADK agent with per-business session memory."""
+    uid = await _verify_token(request)
+    if uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     import json
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
@@ -906,6 +944,9 @@ async def agent_chat_endpoint(request: Request):
 
 
 async def delete_account_endpoint(request: Request):
+    token_uid = await _verify_token(request)
+    if token_uid is None:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     import json
     try:
         body = await request.body()
