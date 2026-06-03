@@ -926,6 +926,10 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#F0F2F5;min-height:10
 window.API = "https://prosper-assistant-666245775274.us-central1.run.app";
 const API = window.API;
 
+function esc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
 async function recoverAccount() {
   const bizName = document.getElementById("recoveryBizName").value.trim();
   if (!bizName) return;
@@ -1005,7 +1009,7 @@ function loadProfile() {
     localStorage.removeItem("prosperIsNew");
     const greeting = isNew
       ? `<div class="welcome-msg">
-          <div class="w-hi">Hi ${profile.ownerName}! 👋</div>
+          <div class="w-hi">Hi ${esc(profile.ownerName)}! 👋</div>
           <div class="w-sub">Your Prosper dashboard is ready. Here's what I can do for you:</div>
           <ul class="w-list">
             <li>Create &amp; send invoices to customers</li>
@@ -1016,8 +1020,8 @@ function loadProfile() {
           <div class="w-try"><b>Try saying:</b>"Send invoice to Chidi 08012345678 for cement worth 50000"</div>
         </div>`
       : `<div class="welcome-msg">
-          <div class="w-hi">Welcome back ${profile.ownerName}! 👋</div>
-          <div class="w-sub">${profile.bizName} is all set. What would you like to do today?</div>
+          <div class="w-hi">Welcome back ${esc(profile.ownerName)}! 👋</div>
+          <div class="w-sub">${esc(profile.bizName)} is all set. What would you like to do today?</div>
           <div class="w-try"><b>Quick actions:</b>Who owes me money? &nbsp;·&nbsp; Today report &nbsp;·&nbsp; Lifetime report</div>
         </div>`;
     document.getElementById("messages").innerHTML = `<div class="msg bot">${greeting}</div>`;
@@ -1161,9 +1165,9 @@ async function loadDash(retryCount = 0) {
     document.getElementById("unpaidList").innerHTML = invoices.length ? invoices.map(i => `
       <div class="invoice-row">
         <div class="invoice-left">
-          <span class="invoice-num">${i.invoice_number}</span>
-          <span class="invoice-name">${i.customer_name}</span>
-          ${i.customer_phone ? `<span class="invoice-phone">${i.customer_phone}</span>` : ""}
+          <span class="invoice-num">${esc(i.invoice_number)}</span>
+          <span class="invoice-name">${esc(i.customer_name)}</span>
+          ${i.customer_phone ? `<span class="invoice-phone">${esc(i.customer_phone)}</span>` : ""}
           <span class="unpaid-badge">Unpaid</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
@@ -1204,8 +1208,8 @@ async function loadCustomers() {
         <tbody>${customers.map(c => `
           <tr>
             <td>
-              <div class="cust-name">${c.customer_name}</div>
-              <div class="cust-phone">${c.customer_phone || ""}${c.customer_email ? " · " + c.customer_email : ""}</div>
+              <div class="cust-name">${esc(c.customer_name)}</div>
+              <div class="cust-phone">${esc(c.customer_phone || "")}${c.customer_email ? " · " + esc(c.customer_email) : ""}</div>
             </td>
             <td><span class="owe-amount">NGN ${Math.round(c.outstanding_balance).toLocaleString()}</span></td>
             <td><span class="paid-amount">NGN ${Math.round(c.total_paid).toLocaleString()}</span></td>
@@ -1236,7 +1240,7 @@ async function loadSales() {
         <tbody>${sales.map(s => `
           <tr>
             <td style="color:#6b7280;font-size:11px">${s.date}</td>
-            <td>${s.item}</td>
+            <td>${esc(s.item)}</td>
             <td style="color:#6b7280">${s.quantity}</td>
             <td style="text-align:right;font-weight:700;color:#16a34a">NGN ${Math.round(s.profit).toLocaleString()}</td>
           </tr>`).join("")}
@@ -1353,8 +1357,8 @@ function renderResponse(text) {
     const rows = lines.slice(1).filter(l => l.startsWith("ROW:")).map(line => {
       const [date, item, rev, prof] = line.replace("ROW:", "").split("|");
       return `<tr style="border-bottom:1px solid #f3f4f6">
-        <td style="padding:8px 12px;color:#6b7280;font-size:12px">${date}</td>
-        <td style="padding:8px 12px;font-weight:500">${item}</td>
+        <td style="padding:8px 12px;color:#6b7280;font-size:12px">${esc(date)}</td>
+        <td style="padding:8px 12px;font-weight:500">${esc(item)}</td>
         <td style="padding:8px 12px;text-align:right;color:#22c55e;font-weight:600">${rev}</td>
         <td style="padding:8px 12px;text-align:right;color:#0d3d26;font-size:12px">${prof}</td>
       </tr>`;
@@ -1389,8 +1393,8 @@ function renderResponse(text) {
         const owesColor = owesNum > 0 ? "#f59e0b" : "#22c55e";
         rows.push(`<tr style="border-bottom:1px solid #f3f4f6">
           <td style="padding:9px 12px">
-            <div style="font-weight:600">${name.trim()}</div>
-            <div style="font-size:11px;color:#9ca3af">${phone.trim()} · ${email.trim()}</div>
+            <div style="font-weight:600">${esc(name.trim())}</div>
+            <div style="font-size:11px;color:#9ca3af">${esc(phone.trim())} · ${esc(email.trim())}</div>
           </td>
           <td style="padding:9px 12px;text-align:right;color:${owesColor};font-weight:700">NGN ${owes}</td>
           <td style="padding:9px 12px;text-align:right;color:#22c55e;font-size:12px">NGN ${paid}</td>
@@ -1428,7 +1432,7 @@ function renderResponse(text) {
         const amount = "NGN " + amtM[1];
         const inv = invM ? `<span style="font-size:11px;color:#9ca3af">${invM[1]}</span>` : "";
         rows.push(`<tr style="border-bottom:1px solid #f3f4f6">
-          <td style="padding:9px 12px;font-weight:600">${name} ${inv}</td>
+          <td style="padding:9px 12px;font-weight:600">${esc(name)} ${inv}</td>
           <td style="padding:9px 12px;text-align:right;color:#f59e0b;font-weight:700">${amount}</td>
         </tr>`);
       }
@@ -1460,7 +1464,7 @@ function renderResponse(text) {
       const [invNum, name, amountRaw] = parts;
       const amount = fmtNGN(amountRaw.replace("NGN", "").trim());
       return `<tr>
-        <td><div class="inv-num">${invNum}</div><div class="inv-name">${name}</div></td>
+        <td><div class="inv-num">${esc(invNum)}</div><div class="inv-name">${esc(name)}</div></td>
         <td class="inv-amt">${amount}</td>
       </tr>`;
     }).join("");
@@ -1538,9 +1542,9 @@ function renderResponse(text) {
       const owesM = block.match(/[Oo]we[s]?[:\s]+[₦N](?:GN\s*)?([\d,]+)/);
       if (!nameM) return "";
       const name = nameM[1];
-      const email = emailM ? `<div style="font-size:11px;color:#9ca3af">${emailM[1]}</div>` : "";
+      const email = emailM ? `<div style="font-size:11px;color:#9ca3af">${esc(emailM[1])}</div>` : "";
       const owes = owesM ? `<span style="color:${owesM[1].replace(/,/g,"") === "0" ? "#22c55e" : "#f59e0b"};font-weight:600">NGN ${owesM[1]}</span>` : `<span style="color:#22c55e;font-weight:600">NGN 0</span>`;
-      return `<tr><td style="padding:8px 12px">${name}${email}</td><td style="padding:8px 12px;text-align:right">${owes}</td></tr>`;
+      return `<tr><td style="padding:8px 12px">${esc(name)}${email}</td><td style="padding:8px 12px;text-align:right">${owes}</td></tr>`;
     }).filter(Boolean).join("");
     if (rows) {
       const intro = text.split(/\n[-•*]/)[0].trim();
@@ -1571,7 +1575,7 @@ async function send() {
   const profile = window._profile || {};
   const business_id = getBizId();
   const m = document.getElementById("messages");
-  m.innerHTML += `<div class="msg user">${t}</div>`;
+  const _um = document.createElement("div"); _um.className = "msg user"; _um.textContent = t; m.appendChild(_um);
   i.value = "";
   m.innerHTML += `<div class="msg bot typing" id="ld">Prosper is thinking...</div>`;
   m.scrollTop = m.scrollHeight;

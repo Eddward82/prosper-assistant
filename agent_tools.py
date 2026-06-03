@@ -1,4 +1,4 @@
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -38,8 +38,21 @@ def save_invoice(customer_name, customer_email, items, total_amount, business_na
     invoices = db["invoice"]
     customers = db["customers"]
 
-    count = invoices.count_documents({"business_id": business_id})
-    invoice_number = f"INV-{str(count + 1).zfill(3)}"
+    # Atomic invoice numbering — safe under concurrent requests.
+    # $setOnInsert seeds the counter from existing invoice count on first use (migration safe).
+    counter_id = f"invoice_seq_{business_id}"
+    existing_count = invoices.count_documents({"business_id": business_id})
+    db["counters"].update_one(
+        {"_id": counter_id},
+        {"$setOnInsert": {"seq": existing_count}},
+        upsert=True
+    )
+    counter = db["counters"].find_one_and_update(
+        {"_id": counter_id},
+        {"$inc": {"seq": 1}},
+        return_document=ReturnDocument.AFTER
+    )
+    invoice_number = f"INV-{str(counter['seq']).zfill(3)}"
 
     invoices.insert_one({
         "business_id": business_id,
