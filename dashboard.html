@@ -519,12 +519,35 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#eef1f6;min-height:10
   .mobile-menu-btn{display:flex;align-items:center;justify-content:center;}
   .main{width:100vw;}
   .content{grid-template-columns:1fr;padding:12px 14px;gap:12px;padding-bottom:70px;}
-  .chat-panel{height:calc(100vh - 240px);min-height:360px;}
-  .right-panel{height:auto;overflow-y:visible;}
+  .right-panel{height:auto;overflow-y:visible;order:-1;}
+  .chat-panel{height:calc(100vh - 240px);min-height:340px;}
   .topbar{padding:0 16px;height:56px;}
   .mobile-bottom-nav{display:flex;}
   #toast-container{bottom:70px;}
 }
+
+/* ── MOBILE: AUTH / MODAL SCREENS ───────────────────────────── */
+@media(max-width:540px){
+  /* Auth screen — less padding, scrollable for email signup */
+  #authScreen{align-items:flex-start!important;overflow-y:auto!important;padding:16px 12px!important;}
+  #authScreen > div{padding:24px 20px!important;border-radius:16px!important;margin:auto 0;width:100%!important;max-width:100%!important;}
+
+  /* Recovery screen */
+  #recoveryScreen{align-items:flex-start!important;overflow-y:auto!important;padding:16px 12px!important;}
+  #recoveryScreen > div{padding:24px 20px!important;border-radius:16px!important;width:100%!important;max-width:100%!important;}
+
+  /* Onboarding modal — sheet style from bottom, scrollable */
+  .modal{align-items:flex-end!important;padding:0!important;backdrop-filter:blur(6px);}
+  .modal-content{border-radius:22px 22px 0 0!important;padding:24px 20px!important;max-height:92vh;overflow-y:auto;width:100%!important;max-width:100%!important;box-shadow:0 -20px 60px rgba(0,0,0,0.2)!important;}
+
+  /* Delete modal */
+  #deleteModal{align-items:flex-end!important;padding:0!important;}
+  #deleteModal > div{border-radius:20px 20px 0 0!important;padding:24px 20px!important;width:100%!important;max-width:100%!important;box-shadow:0 -20px 60px rgba(0,0,0,0.2)!important;}
+
+  /* Tighter auth header spacing */
+  #authScreen .auth-logo-row{margin-bottom:18px!important;}
+}
+
 @media(max-width:480px){
   .metric-value{font-size:17px;}
   .content{padding:10px;gap:10px;padding-bottom:70px;}
@@ -539,7 +562,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#eef1f6;min-height:10
 <div id="authScreen" style="display:none;position:fixed;inset:0;background:#f0f2f5;z-index:200;align-items:center;justify-content:center;padding:16px;">
   <div style="background:white;border-radius:20px;padding:36px 32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.12);">
     <!-- Logo -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
+    <div class="auth-logo-row" style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
       <div style="width:40px;height:40px;background:#0d3d26;border-radius:10px;display:flex;align-items:center;justify-content:center;">
         <svg width="22" height="22" viewBox="0 0 32 32"><text x="4" y="24" font-family="Georgia,serif" font-weight="700" font-size="22" fill="#22c55e">P</text></svg>
       </div>
