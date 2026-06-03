@@ -1672,7 +1672,7 @@ async function submitEditSale() {
     const d = await r.json();
     if (d.success) { closeEditSale(); loadSales(); toast("Sale updated successfully"); }
     else toast(d.error || "Failed to update sale", "error");
-  } catch(e) { toast("Connection error", "error"); }
+  } catch(e) { console.error("Edit sale error:", e); toast("Connection error: " + e.message, "error"); }
   btn.disabled = false; btn.textContent = "Save Changes";
 }
 

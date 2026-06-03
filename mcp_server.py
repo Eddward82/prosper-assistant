@@ -987,7 +987,7 @@ async def delete_account_endpoint(request: Request):
 
 
 async def update_sale_endpoint(request: Request):
-    uid = await _verify_firebase_token(request)
+    uid = await _verify_token(request)
     if not uid:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     try:
@@ -1009,7 +1009,7 @@ async def update_sale_endpoint(request: Request):
 
 
 async def delete_sale_endpoint(request: Request):
-    uid = await _verify_firebase_token(request)
+    uid = await _verify_token(request)
     if not uid:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     try:
