@@ -1332,19 +1332,26 @@ async function loadSales() {
     }
     document.getElementById("salesList").innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th style="text-align:right">Revenue</th><th style="text-align:right">Profit</th><th style="text-align:center">Actions</th></tr></thead>
-        <tbody>${sales.map(s => `
-          <tr>
+        <thead><tr><th>Date</th><th>Type</th><th>Item / Customer</th><th style="text-align:right">Amount</th><th style="text-align:right">Profit/Paid</th><th style="text-align:center">Actions</th></tr></thead>
+        <tbody>${sales.map(s => {
+          const isCash = s.type === "Cash";
+          const typeChip = isCash
+            ? `<span style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600">Cash</span>`
+            : `<span style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600">${s.status === 'paid' ? '✓ Paid' : 'Credit'}</span>`;
+          const itemCell = isCash ? esc(s.item) : `${esc(s.item)}<div style="font-size:10px;color:#9ca3af">${esc(s.customer||'')} · ${esc(s.invoice_number||'')}</div>`;
+          const actions = isCash
+            ? `<button onclick="openEditSale('${s._id}','${esc(s.item)}',${s.quantity},${s.sale_amount||0},${s.cost_amount||0},'${s.date}')" style="background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px">Edit</button>
+               <button onclick="confirmDeleteSale('${s._id}','${esc(s.item)}')" style="background:#fff1f2;border:1px solid #fecdd3;color:#e11d48;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer">Delete</button>`
+            : `<span style="font-size:11px;color:#9ca3af">Invoice</span>`;
+          return `<tr>
             <td style="color:#6b7280;font-size:11px">${s.date}</td>
-            <td>${esc(s.item)}</td>
-            <td style="color:#6b7280">${s.quantity}</td>
+            <td>${typeChip}</td>
+            <td>${itemCell}</td>
             <td style="text-align:right;color:#0d3d26;font-weight:600">NGN ${Math.round(s.sale_amount||0).toLocaleString()}</td>
-            <td style="text-align:right;font-weight:700;color:#16a34a">NGN ${Math.round(s.profit).toLocaleString()}</td>
-            <td style="text-align:center;white-space:nowrap">
-              <button onclick="openEditSale('${s._id}','${esc(s.item)}',${s.quantity},${s.sale_amount||0},${s.cost_amount||0},'${s.date}')" style="background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px">Edit</button>
-              <button onclick="confirmDeleteSale('${s._id}','${esc(s.item)}')" style="background:#fff1f2;border:1px solid #fecdd3;color:#e11d48;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer">Delete</button>
-            </td>
-          </tr>`).join("")}
+            <td style="text-align:right;font-weight:700;color:#16a34a">NGN ${Math.round(s.profit||0).toLocaleString()}</td>
+            <td style="text-align:center;white-space:nowrap">${actions}</td>
+          </tr>`;
+        }).join("")}
         </tbody>
       </table>`;
   } catch(e) { document.getElementById("salesList").innerHTML = '<div class="empty-state">Could not load sales.</div>'; }

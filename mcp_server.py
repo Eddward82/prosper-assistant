@@ -861,21 +861,52 @@ async def sales_endpoint(request: Request):
     business_id = request.query_params.get("business_id", "default")
     date_from = request.query_params.get("from", "")
     date_to = request.query_params.get("to", "")
+
     query = {"business_id": business_id}
     if date_from and date_to:
         query["date"] = {"$gte": date_from, "$lte": date_to}
     elif date_from:
         query["date"] = {"$gte": date_from}
-    sales = list(db["sales"].find(query).sort("date", -1))
-    return JSONResponse({"sales": [{
+
+    # Cash sales
+    cash_sales = list(db["sales"].find(query).sort("date", -1))
+    result = [{
         "_id": str(s["_id"]),
+        "type": "Cash",
         "date": s.get("date", ""),
         "item": s.get("item", ""),
         "quantity": s.get("quantity", 0),
         "sale_amount": s.get("sale_amount", 0),
         "cost_amount": s.get("cost_amount", 0),
         "profit": s.get("profit", 0),
-    } for s in sales]})
+        "customer": "",
+    } for s in cash_sales]
+
+    # Credit sales (invoices)
+    inv_query = {"business_id": business_id, "status": {"$in": ["unpaid", "paid"]}}
+    if date_from and date_to:
+        inv_query["date_created"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        inv_query["date_created"] = {"$gte": date_from}
+    invoices = list(db["invoice"].find(inv_query).sort("date_created", -1))
+    for inv in invoices:
+        result.append({
+            "_id": str(inv["_id"]),
+            "type": "Credit",
+            "date": inv.get("date_created", ""),
+            "item": inv.get("description", inv.get("items", [{}])[0].get("description", "Invoice") if inv.get("items") else "Invoice"),
+            "quantity": 1,
+            "sale_amount": inv.get("total_amount", 0),
+            "cost_amount": 0,
+            "profit": inv.get("amount_paid", 0) - 0,
+            "customer": inv.get("customer_name", ""),
+            "invoice_number": inv.get("invoice_number", ""),
+            "status": inv.get("status", "unpaid"),
+        })
+
+    # Sort all by date descending
+    result.sort(key=lambda x: x["date"] or "", reverse=True)
+    return JSONResponse({"sales": result})
 
 
 async def agent_chat_endpoint(request: Request):
