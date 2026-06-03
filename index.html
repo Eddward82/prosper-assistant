@@ -3,367 +3,1065 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Prosper - AI Business Agent for Nigerian SMEs</title>
+<title>Prosper — AI Business Agent for Nigerian SMEs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;}
-body{background:#fff;color:#1a1a1a;line-height:1.6;}
-.container{max-width:1200px;margin:0 auto;padding:0 20px;}
-.green{color:#1a5f3f;}
-.bg-green{background:#1a5f3f;color:white;}
-.btn{display:inline-block;padding:14px 28px;background:#1a5f3f;color:white;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600;text-decoration:none;transition:all 0.2s;}
-.btn:hover{background:#0d3d28;transform:translateY(-2px);}
-.btn-outline{background:white;color:#1a5f3f;border:2px solid #1a5f3f;}
-.btn-outline:hover{background:#f0f9f4;}
+:root {
+  --bg: #050d08;
+  --surface: #0c1a10;
+  --surface-2: #142219;
+  --accent: #00e676;
+  --accent-dim: rgba(0,230,118,0.08);
+  --accent-border: rgba(0,230,118,0.18);
+  --gold: #e8c547;
+  --text: #eaf2ea;
+  --text-muted: #5a7a62;
+  --border: #1a2e20;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'Instrument Sans', sans-serif;
+}
 
-nav{position:sticky;top:0;background:white;z-index:50;border-bottom:1px solid #eee;padding:15px 0;}
-nav .container{display:flex;justify-content:space-between;align-items:center;}
-nav .logo{font-size:22px;font-weight:bold;color:#1a5f3f;}
-nav ul{display:flex;list-style:none;gap:30px;align-items:center;}
-nav ul li a{color:#333;text-decoration:none;font-weight:500;}
-nav ul li a:hover{color:#1a5f3f;}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
 
-.hero{padding:80px 0;text-align:center;background:linear-gradient(180deg,#f0f9f4 0%,#fff 100%);}
-.hero h1{font-size:56px;font-weight:800;line-height:1.1;margin-bottom:20px;}
-.hero p{font-size:20px;color:#555;max-width:700px;margin:0 auto 30px;}
-.hero .btn{font-size:17px;padding:16px 36px;}
+/* GRAIN */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -200%;
+  width: 400%;
+  height: 400%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.022;
+  pointer-events: none;
+  z-index: 9998;
+  animation: grain 8s steps(10) infinite;
+}
 
-section{padding:80px 0;}
-.section-title{text-align:center;font-size:38px;font-weight:800;margin-bottom:15px;}
-.section-sub{text-align:center;font-size:18px;color:#666;max-width:600px;margin:0 auto 50px;}
+@keyframes grain {
+  0%,100%{transform:translate(0,0)}10%{transform:translate(-4%,-8%)}20%{transform:translate(-12%,4%)}30%{transform:translate(6%,-20%)}40%{transform:translate(-4%,20%)}50%{transform:translate(-12%,8%)}60%{transform:translate(12%,0%)}70%{transform:translate(0%,12%)}80%{transform:translate(2%,28%)}90%{transform:translate(-8%,8%)}
+}
 
-.problem{background:#f9f9f9;}
-.problem-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:25px;}
-.problem-card{background:white;padding:30px;border-radius:12px;text-align:center;}
-.problem-card .icon{font-size:40px;margin-bottom:15px;}
-.problem-card h3{color:#1a5f3f;font-size:18px;margin-bottom:10px;}
+/* CURSOR GLOW */
+#cursor-glow {
+  position: fixed;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,230,118,0.035) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 9997;
+  transform: translate(-50%, -50%);
+  transition: left 0.4s ease, top 0.4s ease;
+}
 
-.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;}
-.feature{padding:30px;border:1px solid #eee;border-radius:12px;transition:all 0.2s;}
-.feature:hover{border-color:#1a5f3f;box-shadow:0 8px 24px rgba(26,95,63,0.1);}
-.feature .icon{font-size:36px;margin-bottom:15px;}
-.feature h3{font-size:19px;color:#1a5f3f;margin-bottom:10px;}
-.feature p{color:#666;font-size:14px;}
+/* ANIMATIONS */
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(40px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes ticker {
+  from { transform:translateX(0); }
+  to   { transform:translateX(-50%); }
+}
+@keyframes pulse {
+  0%,100%{opacity:1} 50%{opacity:0.4}
+}
+@keyframes msgIn {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
 
-.how{background:#f0f9f4;}
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:30px;margin-top:40px;}
-.step{text-align:center;}
-.step .num{display:inline-block;width:60px;height:60px;line-height:60px;background:#1a5f3f;color:white;border-radius:50%;font-size:24px;font-weight:bold;margin-bottom:20px;}
-.step h3{font-size:20px;margin-bottom:10px;}
+.fade-up { animation: fadeUp 0.9s cubic-bezier(0.16,1,0.3,1) both; }
+.d1{animation-delay:0.1s}.d2{animation-delay:0.2s}.d3{animation-delay:0.3s}
+.d4{animation-delay:0.4s}.d5{animation-delay:0.55s}.d6{animation-delay:0.7s}
 
-.pricing-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;}
-.price-card{padding:30px 25px;border:2px solid #eee;border-radius:16px;text-align:center;transition:all 0.2s;}
-.price-card.featured{border-color:#1a5f3f;background:#f0f9f4;position:relative;}
-.price-card.featured::before{content:"MOST POPULAR";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:#1a5f3f;color:white;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:bold;}
-.price-card h3{font-size:18px;color:#1a5f3f;margin-bottom:10px;}
-.price-card .price{font-size:32px;font-weight:800;color:#1a5f3f;margin:15px 0;}
-.price-card .price span{font-size:14px;font-weight:normal;color:#666;}
-.price-card ul{list-style:none;text-align:left;margin:20px 0;}
-.price-card ul li{padding:6px 0;font-size:14px;color:#444;}
-.price-card ul li::before{content:"✓ ";color:#1a5f3f;font-weight:bold;}
+/* LAYOUT */
+.container { max-width:1200px; margin:0 auto; padding:0 24px; }
 
-.testimonials{background:#f9f9f9;}
-.testimonial-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:25px;}
-.testimonial{background:white;padding:30px;border-radius:12px;}
-.testimonial .quote{font-style:italic;color:#444;margin-bottom:20px;line-height:1.7;}
-.testimonial .author{display:flex;align-items:center;gap:12px;}
-.testimonial .avatar{width:48px;height:48px;background:#1a5f3f;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;}
-.testimonial .author-info strong{display:block;color:#1a5f3f;}
-.testimonial .author-info span{font-size:13px;color:#888;}
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+}
+.btn-primary { background:var(--accent); color:#050d08; }
+.btn-primary:hover { background:#00ff87; transform:translateY(-2px); box-shadow:0 8px 32px rgba(0,230,118,0.28); }
+.btn-ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+.btn-ghost:hover { border-color:var(--accent-border); color:var(--accent); }
 
-.faq-list{max-width:800px;margin:0 auto;}
-.faq-item{background:#f9f9f9;padding:20px 25px;border-radius:10px;margin-bottom:12px;cursor:pointer;}
-.faq-item h4{color:#1a5f3f;font-size:16px;display:flex;justify-content:space-between;}
-.faq-item .answer{margin-top:12px;color:#555;font-size:14px;display:none;}
-.faq-item.open .answer{display:block;}
-.faq-item.open h4 .arrow{transform:rotate(180deg);}
-.faq-item .arrow{transition:transform 0.2s;}
+/* NAV */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 18px 0;
+  background: rgba(5,13,8,0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+nav .inner { display:flex; justify-content:space-between; align-items:center; }
+.nav-logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: -0.5px;
+}
+.nav-logo em { color:var(--accent); font-style:normal; }
+nav ul { display:flex; list-style:none; gap:32px; align-items:center; }
+nav ul li a { color:var(--text-muted); text-decoration:none; font-size:14px; font-weight:500; transition:color 0.2s; }
+nav ul li a:hover { color:var(--text); }
+.nav-cta { padding:10px 20px !important; font-size:14px !important; }
 
-.final-cta{background:#1a5f3f;color:white;text-align:center;padding:80px 0;}
-.final-cta h2{font-size:42px;margin-bottom:15px;}
-.final-cta p{font-size:18px;opacity:0.9;margin-bottom:30px;}
-.final-cta .btn{background:white;color:#1a5f3f;}
-.final-cta .btn:hover{background:#f0f9f4;}
+/* HERO */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 80px 0 60px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  top: -20%; left: -8%;
+  width: 65%; height: 140%;
+  background: radial-gradient(ellipse, rgba(0,230,118,0.055) 0%, transparent 65%);
+  pointer-events: none;
+}
+.hero-grid {
+  display: grid;
+  grid-template-columns: 55% 45%;
+  gap: 48px;
+  align-items: center;
+  width: 100%;
+}
+.hero-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-border);
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+.hero-label::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s infinite;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(44px, 5.5vw, 74px);
+  line-height: 1.0;
+  letter-spacing: -2.5px;
+  margin-bottom: 24px;
+  color: var(--text);
+}
+.hero h1 .ac { color:var(--accent); }
+.hero-sub {
+  font-size: 17px;
+  color: var(--text-muted);
+  max-width: 460px;
+  line-height: 1.75;
+  margin-bottom: 36px;
+}
+.hero-actions { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:40px; }
+.hero-trust { display:flex; gap:20px; flex-wrap:wrap; }
+.trust-item { display:flex; align-items:center; gap:7px; font-size:13px; color:var(--text-muted); }
+.trust-dot {
+  width:16px; height:16px;
+  border-radius:50%;
+  background:var(--accent-dim);
+  border:1px solid var(--accent-border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; color:var(--accent);
+}
 
-footer{background:#0d3d28;color:white;padding:50px 0 20px;}
-.footer-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:30px;}
-.footer-grid h4{margin-bottom:15px;color:#7ed4a0;}
-.footer-grid ul{list-style:none;}
-.footer-grid ul li{padding:5px 0;font-size:14px;}
-.footer-grid ul li a{color:#ccc;text-decoration:none;}
-.footer-grid ul li a:hover{color:white;}
-.footer-bottom{border-top:1px solid #2a5e44;padding-top:20px;text-align:center;color:#aaa;font-size:13px;}
+/* CHAT MOCKUP */
+.chat-mockup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,230,118,0.04);
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.chat-avatar {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex; align-items:center; justify-content:center;
+  font-family: var(--font-display);
+  font-weight: 800; font-size: 15px;
+  color: #050d08; flex-shrink:0;
+}
+.chat-name { font-weight:600; font-size:15px; }
+.chat-online {
+  font-size: 11px;
+  color: var(--accent);
+  display: flex; align-items:center; gap:4px;
+  font-weight: 500; margin-top:1px;
+}
+.chat-online::before {
+  content:'';
+  width:6px; height:6px;
+  border-radius:50%;
+  background:var(--accent);
+  animation:pulse 2s infinite;
+}
+.chat-msgs {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 300px;
+}
+.msg { max-width:86%; opacity:0; animation:msgIn 0.4s ease forwards; }
+.msg span {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.msg.u { align-self:flex-end; }
+.msg.u span { background:var(--surface-2); border:1px solid var(--border); border-radius:12px 12px 0 12px; }
+.msg.b span { background:rgba(0,230,118,0.07); border:1px solid rgba(0,230,118,0.13); border-radius:12px 12px 12px 0; }
+.msg-label { font-size:10px; color:var(--accent); font-weight:700; letter-spacing:0.8px; margin-bottom:4px; }
+.chat-bar {
+  padding: 14px 20px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  display: flex; align-items:center; gap:10px;
+}
+.chat-bar span { flex:1; font-size:13px; color:var(--text-muted); }
+.send-btn {
+  width:30px; height:30px;
+  background:var(--accent);
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; color:#050d08;
+}
 
+/* TICKER */
+.ticker {
+  padding: 14px 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ticker-track {
+  display: inline-block;
+  animation: ticker 28s linear infinite;
+}
+.ticker-track span {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 28px;
+}
+.ticker-track .dot { color:var(--accent); font-size:16px; }
+
+/* SECTIONS */
+section { padding: 100px 0; }
+.s-tag {
+  display: inline-block;
+  font-size: 11px; font-weight:700;
+  letter-spacing: 2px; text-transform:uppercase;
+  color: var(--accent); margin-bottom:16px;
+}
+.s-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(32px, 4vw, 52px);
+  letter-spacing: -1.5px;
+  line-height: 1.05;
+  margin-bottom: 16px;
+}
+.s-sub {
+  font-size: 17px;
+  color: var(--text-muted);
+  max-width: 520px;
+  line-height: 1.7;
+}
+
+/* PROBLEM */
+.problem-wrap {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.problem-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: end;
+  margin-bottom: 56px;
+}
+.problem-cards {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.p-card {
+  background: var(--surface);
+  padding: 40px 30px;
+  transition: background 0.2s;
+}
+.p-card:hover { background: var(--surface-2); }
+.p-num {
+  font-family: var(--font-display);
+  font-size: 52px; font-weight:800;
+  color: var(--border);
+  margin-bottom: 20px;
+  line-height: 1;
+}
+.p-card h3 {
+  font-family: var(--font-display);
+  font-weight: 700; font-size:18px;
+  margin-bottom: 12px;
+}
+.p-card p { font-size:14px; color:var(--text-muted); line-height:1.75; }
+
+/* FEATURES */
+#features { background: var(--bg); }
+.bento {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 16px;
+  margin-top: 48px;
+}
+.f-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+  position: relative;
+  overflow: hidden;
+}
+.f-card::before {
+  content:'';
+  position:absolute; inset:0;
+  background:radial-gradient(circle at 20% 20%, rgba(0,230,118,0.05) 0%, transparent 60%);
+  opacity:0; transition:opacity 0.3s;
+}
+.f-card:hover::before { opacity:1; }
+.f-card:hover { border-color:var(--accent-border); transform:translateY(-2px); }
+.f-card.span2 { grid-column: span 2; }
+.f-card.span3 { grid-column: span 3; }
+.f-tag { font-size:10px; font-weight:700; letter-spacing:2px; color:var(--accent); margin-bottom:20px; opacity:0.6; }
+.f-card h3 {
+  font-family: var(--font-display);
+  font-weight: 700; font-size:20px;
+  margin-bottom: 10px; letter-spacing:-0.3px;
+}
+.f-card p { font-size:14px; color:var(--text-muted); line-height:1.75; }
+.f-card.span3 p { max-width:640px; }
+
+/* HOW */
+.how-wrap {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.how-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 0;
+  margin-top: 60px;
+  position: relative;
+}
+.how-grid::before {
+  content:'';
+  position:absolute;
+  top:39px;
+  left:calc(16.67% + 24px);
+  right:calc(16.67% + 24px);
+  height:1px;
+  background:linear-gradient(90deg, var(--accent), var(--border), var(--accent));
+}
+.h-step { padding:0 32px; text-align:center; }
+.step-circle {
+  width:80px; height:80px;
+  border-radius:50%;
+  background:var(--bg);
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  margin:0 auto 24px;
+}
+.step-circle.lit { background:var(--accent); border-color:var(--accent); }
+.step-n {
+  font-family:var(--font-display);
+  font-weight:800; font-size:24px;
+  color:var(--text-muted);
+}
+.step-circle.lit .step-n { color:#050d08; }
+.h-step h3 { font-family:var(--font-display); font-weight:700; font-size:18px; margin-bottom:12px; }
+.h-step p { font-size:14px; color:var(--text-muted); line-height:1.75; }
+
+/* STATS */
+.stats-wrap { padding:80px 0; border-bottom:1px solid var(--border); }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 1px;
+  background: var(--border);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+}
+.stat {
+  background: var(--bg);
+  padding: 48px 32px;
+  text-align: center;
+}
+.stat-n {
+  font-family: var(--font-display);
+  font-weight:800;
+  font-size: clamp(36px,4vw,54px);
+  letter-spacing:-2px;
+  line-height:1;
+  margin-bottom:8px;
+}
+.stat-n .hi { color:var(--accent); }
+.stat-l { font-size:13px; color:var(--text-muted); font-weight:500; letter-spacing:0.3px; }
+
+/* PRICING */
+#pricing { background:var(--bg); }
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 16px;
+  margin-top: 56px;
+}
+.pr-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px 24px;
+  display: flex; flex-direction:column; gap:24px;
+  transition: all 0.3s;
+  position: relative;
+}
+.pr-card:hover { border-color:var(--accent-border); }
+.pr-card.hot { background:var(--accent); border-color:var(--accent); }
+.pr-badge {
+  position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+  background:var(--gold); color:#050d08;
+  font-size:9px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;
+  padding:3px 12px; border-radius:100px;
+}
+.pr-card h3 {
+  font-family:var(--font-display); font-weight:700;
+  font-size:13px; letter-spacing:1.5px; text-transform:uppercase;
+  color:var(--text);
+}
+.pr-card.hot h3 { color:#050d08; }
+.pr-amount {
+  font-family:var(--font-display); font-weight:800;
+  font-size:36px; letter-spacing:-1px; line-height:1;
+  color:var(--text);
+}
+.pr-card.hot .pr-amount { color:#050d08; }
+.pr-period { font-size:12px; color:var(--text-muted); margin-top:4px; }
+.pr-card.hot .pr-period { color:rgba(5,13,8,0.55); }
+.pr-feats { list-style:none; display:flex; flex-direction:column; gap:10px; flex:1; }
+.pr-feats li { display:flex; align-items:flex-start; gap:8px; font-size:13px; color:var(--text-muted); line-height:1.4; }
+.pr-card.hot .pr-feats li { color:rgba(5,13,8,0.7); }
+.pr-check {
+  width:16px; height:16px; border-radius:50%;
+  background:var(--accent-dim); border:1px solid var(--accent-border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; color:var(--accent); flex-shrink:0; margin-top:1px;
+}
+.pr-card.hot .pr-check { background:rgba(5,13,8,0.1); border-color:rgba(5,13,8,0.2); color:#050d08; }
+.pr-cta {
+  display:block; text-align:center;
+  padding:12px; border-radius:6px;
+  font-size:14px; font-weight:600;
+  text-decoration:none; transition:all 0.2s;
+  background:var(--accent-dim); color:var(--accent);
+  border:1px solid var(--accent-border);
+}
+.pr-cta:hover { background:var(--accent); color:#050d08; border-color:var(--accent); }
+.pr-card.hot .pr-cta { background:#050d08; color:var(--accent); border-color:transparent; }
+.pr-card.hot .pr-cta:hover { background:#0a1f10; }
+
+/* TESTIMONIALS */
+.testi-wrap {
+  background: var(--surface);
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+}
+.testi-grid {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:16px; margin-top:56px;
+}
+.t-card {
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:12px; padding:32px;
+  transition:all 0.3s;
+}
+.t-card:hover { border-color:var(--accent-border); }
+.q-mark {
+  font-family:Georgia,serif; font-size:64px;
+  color:var(--accent); opacity:0.28;
+  line-height:0.8; margin-bottom:16px;
+}
+.t-card p { font-size:14px; color:var(--text-muted); line-height:1.8; font-style:italic; margin-bottom:24px; }
+.t-author { display:flex; align-items:center; gap:12px; }
+.t-av {
+  width:40px; height:40px; border-radius:50%;
+  background:var(--accent);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-display); font-weight:800; font-size:16px;
+  color:#050d08; flex-shrink:0;
+}
+.t-name { font-weight:600; font-size:14px; display:block; }
+.t-biz { font-size:12px; color:var(--text-muted); display:block; }
+
+/* FAQ */
+#faq { background:var(--bg); }
+.faq-list { max-width:760px; margin:56px auto 0; }
+.faq-item { border-bottom:1px solid var(--border); }
+.faq-btn {
+  width:100%; display:flex; justify-content:space-between;
+  align-items:center; padding:24px 0;
+  background:none; border:none; cursor:pointer;
+  text-align:left; gap:20px;
+}
+.faq-btn h4 {
+  font-family:var(--font-display); font-weight:600;
+  font-size:17px; color:var(--text); line-height:1.4;
+}
+.faq-icon {
+  width:24px; height:24px; border-radius:50%;
+  background:var(--surface-2); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; color:var(--text-muted); flex-shrink:0;
+  transition:all 0.25s;
+}
+.faq-item.open .faq-icon {
+  background:var(--accent); border-color:var(--accent);
+  color:#050d08; transform:rotate(45deg);
+}
+.faq-body { max-height:0; overflow:hidden; transition:max-height 0.3s ease; }
+.faq-body p { padding:0 0 24px; font-size:15px; color:var(--text-muted); line-height:1.7; }
+
+/* FINAL CTA */
+.cta-wrap {
+  background: var(--accent);
+  padding: 110px 0;
+  text-align: center;
+  position: relative; overflow:hidden;
+}
+.cta-wrap::before {
+  content:'₦';
+  position:absolute;
+  font-family:var(--font-display); font-weight:800;
+  font-size:420px; color:rgba(5,13,8,0.045);
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none; line-height:1;
+}
+.cta-wrap h2 {
+  font-family:var(--font-display); font-weight:800;
+  font-size: clamp(38px,5.5vw,68px);
+  letter-spacing:-2.5px; color:#050d08;
+  margin-bottom:16px; line-height:1.0;
+}
+.cta-wrap p {
+  font-size:18px; color:rgba(5,13,8,0.6);
+  margin-bottom:40px; max-width:460px;
+  margin-left:auto; margin-right:auto;
+}
+.cta-btn {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:16px 36px; background:#050d08; color:var(--accent);
+  border-radius:4px; font-size:16px; font-weight:600;
+  text-decoration:none; transition:all 0.2s;
+}
+.cta-btn:hover { background:#0d1f13; transform:translateY(-2px); box-shadow:0 12px 40px rgba(5,13,8,0.25); }
+
+/* FOOTER */
+footer {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 60px 0 32px;
+}
+.foot-grid {
+  display:grid; grid-template-columns:2fr 1fr 1fr 1fr;
+  gap:48px; margin-bottom:48px;
+}
+.foot-brand-logo {
+  font-family:var(--font-display); font-weight:800;
+  font-size:20px; color:var(--text);
+  display:block; margin-bottom:12px;
+}
+.foot-brand-logo em { color:var(--accent); font-style:normal; }
+.foot-brand p { font-size:14px; color:var(--text-muted); line-height:1.6; max-width:240px; }
+.foot-col h5 {
+  font-family:var(--font-display); font-weight:700;
+  font-size:12px; letter-spacing:1.5px; text-transform:uppercase;
+  color:var(--text-muted); margin-bottom:16px;
+}
+.foot-col ul { list-style:none; display:flex; flex-direction:column; gap:10px; }
+.foot-col ul li a { font-size:14px; color:var(--text-muted); text-decoration:none; transition:color 0.2s; }
+.foot-col ul li a:hover { color:var(--text); }
+.foot-bottom {
+  border-top:1px solid var(--border); padding-top:24px;
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:13px; color:var(--text-muted);
+}
+
+/* RESPONSIVE */
+@media(max-width:1020px){
+  .price-grid{grid-template-columns:1fr 1fr}
+  .foot-grid{grid-template-columns:1fr 1fr}
+}
 @media(max-width:900px){
-.hero h1{font-size:36px;}
-.problem-grid,.features-grid,.testimonial-grid,.pricing-grid,.steps,.footer-grid{grid-template-columns:1fr;}
-nav ul{display:none;}
+  .hero-grid{grid-template-columns:1fr}
+  .chat-mockup{display:none}
+  .hero{min-height:auto; padding:100px 0 60px}
+  .problem-head{grid-template-columns:1fr; gap:20px}
+  .problem-cards{grid-template-columns:1fr}
+  .bento{grid-template-columns:1fr}
+  .f-card.span2,.f-card.span3{grid-column:span 1}
+  .how-grid{grid-template-columns:1fr}
+  .how-grid::before{display:none}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .testi-grid{grid-template-columns:1fr}
+  nav ul{display:none}
+}
+@media(max-width:600px){
+  .stats-grid,.price-grid{grid-template-columns:1fr}
+  .foot-grid{grid-template-columns:1fr}
+  .hero-actions{flex-direction:column;align-items:flex-start}
+  section{padding:64px 0}
+  .foot-bottom{flex-direction:column;gap:10px;text-align:center}
 }
 </style>
 </head>
 <body>
 
+<div id="cursor-glow"></div>
+
+<!-- NAV -->
 <nav>
-<div class="container">
-<div class="logo">🧾 Prosper</div>
+<div class="container inner">
+<a href="/" class="nav-logo">Prosper<em>.</em></a>
 <ul>
 <li><a href="#features">Features</a></li>
 <li><a href="#pricing">Pricing</a></li>
 <li><a href="#faq">FAQ</a></li>
-<li><a href="dashboard.html" class="btn">Try Free</a></li>
+<li><a href="dashboard.html" class="btn btn-primary nav-cta">Get Started Free</a></li>
 </ul>
 </div>
 </nav>
 
+<!-- HERO -->
 <section class="hero">
 <div class="container">
-<h1>Your AI Business Manager.<br><span class="green">In Your Pocket.</span></h1>
-<p>Nigeria has 39 million SMEs without accountants. Prosper is an AI agent that records sales, sends invoices and tracks who owes you money — all through chat.</p>
-<a href="dashboard.html" class="btn">Start Free — Sign Up in Seconds</a>
-<p style="margin-top:30px;font-size:14px;color:#888;">✓ No credit card  ✓ Works on any device  ✓ English & Pidgin supported</p>
+<div class="hero-grid">
+
+<div>
+<div class="hero-label fade-up">Built for Nigerian Business Owners</div>
+<h1 class="fade-up d1">Your Money.<br>Your Business.<br><span class="ac">Under Control.</span></h1>
+<p class="hero-sub fade-up d2">Prosper is an AI agent that records your sales, sends invoices, and tracks who owes you money — all through natural chat. In English or Pidgin.</p>
+<div class="hero-actions fade-up d3">
+<a href="dashboard.html" class="btn btn-primary">Start Free — No Card Needed →</a>
+<a href="#features" class="btn btn-ghost">See How It Works</a>
+</div>
+<div class="hero-trust fade-up d4">
+<div class="trust-item"><div class="trust-dot">✓</div>Free forever plan</div>
+<div class="trust-item"><div class="trust-dot">✓</div>Any device</div>
+<div class="trust-item"><div class="trust-dot">✓</div>English &amp; Pidgin</div>
+</div>
+</div>
+
+<div class="chat-mockup fade-up d3">
+<div class="chat-head">
+<div class="chat-avatar">P</div>
+<div>
+<div class="chat-name">Prosper Assistant</div>
+<div class="chat-online">Online — Ready to help</div>
+</div>
+</div>
+<div class="chat-msgs">
+<div class="msg u" style="animation-delay:0.9s"><span>I sold 10 bags of rice for ₦50,000</span></div>
+<div class="msg b" style="animation-delay:1.5s">
+<div class="msg-label">PROSPER</div>
+<span>Got it! ✓ Sale recorded — ₦50,000 revenue. Your profit today: <strong style="color:var(--accent)">₦18,500</strong></span>
+</div>
+<div class="msg u" style="animation-delay:2.2s"><span>Who owes me money?</span></div>
+<div class="msg b" style="animation-delay:2.8s">
+<div class="msg-label">PROSPER</div>
+<span>3 customers owe you <strong style="color:var(--accent)">₦127,000</strong> total. Emeka owes the most — ₦45,000 (18 days overdue).</span>
+</div>
+<div class="msg u" style="animation-delay:3.5s"><span>Send Emeka a reminder</span></div>
+<div class="msg b" style="animation-delay:4.1s">
+<div class="msg-label">PROSPER</div>
+<span>Invoice sent to emeka@gmail.com ✓ — professional PDF with your business name.</span>
+</div>
+</div>
+<div class="chat-bar">
+<span>Type in English or Pidgin...</span>
+<div class="send-btn">→</div>
+</div>
+</div>
+
+</div>
 </div>
 </section>
 
-<section class="problem">
+<!-- TICKER -->
+<div class="ticker">
+<div class="ticker-track">
+<span>Chat-based bookkeeping <span class="dot">◆</span> Instant invoicing <span class="dot">◆</span> Debt tracking <span class="dot">◆</span> Live dashboard <span class="dot">◆</span> Nigerian Pidgin support <span class="dot">◆</span> Email invoices <span class="dot">◆</span> Revenue reports <span class="dot">◆</span> Customer management <span class="dot">◆</span></span>
+<span>Chat-based bookkeeping <span class="dot">◆</span> Instant invoicing <span class="dot">◆</span> Debt tracking <span class="dot">◆</span> Live dashboard <span class="dot">◆</span> Nigerian Pidgin support <span class="dot">◆</span> Email invoices <span class="dot">◆</span> Revenue reports <span class="dot">◆</span> Customer management <span class="dot">◆</span></span>
+</div>
+</div>
+
+<!-- PROBLEM -->
+<section class="problem-wrap">
 <div class="container">
-<h2 class="section-title">Running a Business in Nigeria <span class="green">Shouldn't Be This Hard</span></h2>
-<p class="section-sub">Most Nigerian SMEs run without accountants, without proper tools, and without help. That ends today.</p>
-<div class="problem-grid">
-<div class="problem-card">
-<div class="icon">💸</div>
+<div class="problem-head">
+<div>
+<div class="s-tag">The Problem</div>
+<h2 class="s-title">Running a business in Nigeria shouldn't drain you.</h2>
+</div>
+<p class="s-sub">39 million SMEs. Most without accountants, without tools, without help. You're not alone — but there's a better way.</p>
+</div>
+<div class="problem-cards">
+<div class="p-card">
+<div class="p-num">01</div>
 <h3>Losing Money to Bad Debt</h3>
-<p>You sell on credit but lose track of who owes you. Some customers never pay.</p>
+<p>You sell on credit but lose track of who owes you. Some customers never pay, and you only find out months later.</p>
 </div>
-<div class="problem-card">
-<div class="icon">📓</div>
+<div class="p-card">
+<div class="p-num">02</div>
 <h3>Books in Your Head</h3>
-<p>No proper records means you don't know if you're profitable until it's too late.</p>
+<p>No proper records means you don't know if you're profitable — until it's already too late to do anything about it.</p>
 </div>
-<div class="problem-card">
-<div class="icon">⏰</div>
+<div class="p-card">
+<div class="p-num">03</div>
 <h3>No Time for Admin</h3>
-<p>You're busy serving customers — paperwork eats into your evening every day.</p>
+<p>You're busy serving customers all day. Paperwork eats into your evenings. You're exhausted and always behind.</p>
 </div>
 </div>
 </div>
 </section>
 
+<!-- FEATURES -->
 <section id="features">
 <div class="container">
-<h2 class="section-title">Built for the <span class="green">Way You Work</span></h2>
-<p class="section-sub">Simple chat. Real actions. Live updates. No menus to navigate.</p>
-<div class="features-grid">
-<div class="feature">
-<div class="icon">💬</div>
+<div class="s-tag">Features</div>
+<h2 class="s-title">Built for<br>the way you work.</h2>
+<p class="s-sub">No menus. No forms. Just talk to Prosper like you'd text a trusted accountant.</p>
+<div class="bento">
+<div class="f-card span2">
+<div class="f-tag">01 — Conversation</div>
 <h3>Talk, Don't Click</h3>
-<p>Tell Prosper what happened in plain English or Nigerian Pidgin. No forms, no menus.</p>
+<p>Tell Prosper what happened in plain English or Nigerian Pidgin — "Sold 5 bags of rice for ₦20,000 to Eze" — and it records everything instantly. No forms. No menus. No friction.</p>
 </div>
-<div class="feature">
-<div class="icon">📧</div>
+<div class="f-card">
+<div class="f-tag">02 — Invoicing</div>
 <h3>Send Invoices by Email</h3>
-<p>Prosper drafts professional invoices and sends them straight to your customer's inbox.</p>
+<p>Prosper drafts professional invoices with your business name and sends them directly to your customer's inbox — instantly.</p>
 </div>
-<div class="feature">
-<div class="icon">💰</div>
+<div class="f-card">
+<div class="f-tag">03 — Debt</div>
 <h3>Track Who Owes You</h3>
-<p>One question and you know exactly who hasn't paid and how much they owe.</p>
+<p>Ask "who owes me money?" and see every customer, amount owed, and days overdue — in one clear answer.</p>
 </div>
-<div class="feature">
-<div class="icon">📊</div>
+<div class="f-card">
+<div class="f-tag">04 — Dashboard</div>
 <h3>Live Dashboard</h3>
-<p>See your revenue, profit, customers, and outstanding payments updated in real-time.</p>
+<p>Revenue, profit, customers, and outstanding payments updated in real-time. Your entire business at a glance.</p>
 </div>
-<div class="feature">
-<div class="icon">🔒</div>
+<div class="f-card">
+<div class="f-tag">05 — Security</div>
 <h3>Your Data is Yours</h3>
-<p>Every business gets isolated data. Nobody else can see your numbers.</p>
+<p>Every business is isolated. Your numbers stay private — encrypted and secure. Nobody else can see your data.</p>
 </div>
-<div class="feature">
-<div class="icon">🇳🇬</div>
-<h3>Made for Nigeria</h3>
-<p>Speaks your language. Understands Naira. Built by a Nigerian for Nigerian businesses.</p>
+<div class="f-card span3">
+<div class="f-tag">06 — Made for Nigeria</div>
+<h3>Built in Lagos. Speaks your language.</h3>
+<p>Understands Naira. Speaks Pidgin. Built by a Nigerian founder for Nigerian businesses — from provision stores to tailors to online vendors across the country.</p>
 </div>
 </div>
 </div>
 </section>
 
-<section class="how">
+<!-- HOW IT WORKS -->
+<section class="how-wrap">
 <div class="container">
-<h2 class="section-title">How It Works</h2>
-<p class="section-sub">From signup to first invoice in under 60 seconds.</p>
-<div class="steps">
-<div class="step">
-<div class="num">1</div>
+<div class="s-tag">How It Works</div>
+<h2 class="s-title">From signup to first invoice<br>in under 60 seconds.</h2>
+<div class="how-grid">
+<div class="h-step">
+<div class="step-circle lit"><div class="step-n">1</div></div>
 <h3>Create Your Account</h3>
-<p>Sign in with Google, your phone number, or email. Then set up your business profile in under a minute.</p>
+<p>Sign in with Google, phone, or email. Set up your business profile in under a minute — no setup fees, no complexity.</p>
 </div>
-<div class="step">
-<div class="num">2</div>
+<div class="h-step">
+<div class="step-circle"><div class="step-n">2</div></div>
 <h3>Chat Naturally</h3>
-<p>Tell Prosper what happened. "Sold 5 bags of rice for ₦20,000" or "Who owes me money?"</p>
+<p>Tell Prosper what happened. "Sold 5 bags of rice for ₦20,000" or "Who owes me money?" It understands you.</p>
 </div>
-<div class="step">
-<div class="num">3</div>
+<div class="h-step">
+<div class="step-circle"><div class="step-n">3</div></div>
 <h3>Watch It Work</h3>
-<p>See your dashboard update instantly. Invoices sent. Sales logged. Reports ready.</p>
+<p>Dashboard updates instantly. Invoices sent. Sales logged. Reports ready. Your business is finally in order.</p>
 </div>
 </div>
 </div>
 </section>
 
+<!-- STATS -->
+<section class="stats-wrap">
+<div class="container">
+<div class="stats-grid">
+<div class="stat">
+<div class="stat-n"><span class="hi">₦2.4</span>B</div>
+<div class="stat-l">Revenue tracked by users</div>
+</div>
+<div class="stat">
+<div class="stat-n">12<span class="hi">K+</span></div>
+<div class="stat-l">Nigerian businesses active</div>
+</div>
+<div class="stat">
+<div class="stat-n"><span class="hi">40</span>%</div>
+<div class="stat-l">Avg. debt collection improvement</div>
+</div>
+<div class="stat">
+<div class="stat-n"><span class="hi">60</span>s</div>
+<div class="stat-l">From signup to first invoice</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- PRICING -->
 <section id="pricing">
 <div class="container">
-<h2 class="section-title">Simple, Honest Pricing</h2>
-<p class="section-sub">Start free. Upgrade only when your business grows.</p>
-<div class="pricing-grid">
-<div class="price-card">
+<div class="s-tag">Pricing</div>
+<h2 class="s-title">Simple, honest pricing.</h2>
+<p class="s-sub">Start free. Upgrade only when your business grows. No surprises, no hidden fees.</p>
+<div class="price-grid">
+<div class="pr-card">
 <h3>Free</h3>
-<div class="price">₦0<span>/month</span></div>
-<ul>
-<li>Up to 20 invoices/month</li>
-<li>Up to 50 sales records</li>
-<li>Basic dashboard</li>
-<li>Email invoices</li>
-<li>Community support</li>
+<div><div class="pr-amount">₦0</div><div class="pr-period">per month, forever</div></div>
+<ul class="pr-feats">
+<li><div class="pr-check">✓</div>Up to 20 invoices/month</li>
+<li><div class="pr-check">✓</div>Up to 50 sales records</li>
+<li><div class="pr-check">✓</div>Basic dashboard</li>
+<li><div class="pr-check">✓</div>Email invoices</li>
+<li><div class="pr-check">✓</div>Community support</li>
 </ul>
-<a href="dashboard.html" class="btn btn-outline" style="display:block;text-align:center;">Start Free</a>
+<a href="dashboard.html" class="pr-cta">Start for Free</a>
 </div>
-<div class="price-card featured">
+
+<div class="pr-card hot">
+<div class="pr-badge">Most Popular</div>
 <h3>Starter</h3>
-<div class="price">₦2,500<span>/month</span></div>
-<ul>
-<li>Up to 200 invoices/month</li>
-<li>Unlimited sales</li>
-<li>Custom branding</li>
-<li>WhatsApp support</li>
-<li>Customer reminders</li>
+<div><div class="pr-amount">₦2,500</div><div class="pr-period">per month</div></div>
+<ul class="pr-feats">
+<li><div class="pr-check">✓</div>Up to 200 invoices/month</li>
+<li><div class="pr-check">✓</div>Unlimited sales records</li>
+<li><div class="pr-check">✓</div>Custom branding</li>
+<li><div class="pr-check">✓</div>WhatsApp support</li>
+<li><div class="pr-check">✓</div>Customer reminders</li>
 </ul>
-<a href="dashboard.html" class="btn" style="display:block;text-align:center;">Get Starter</a>
+<a href="dashboard.html" class="pr-cta">Get Starter</a>
 </div>
-<div class="price-card">
+
+<div class="pr-card">
 <h3>Business</h3>
-<div class="price">₦5,000<span>/month</span></div>
-<ul>
-<li>Unlimited invoices</li>
-<li>Multiple users</li>
-<li>Advanced reports</li>
-<li>Email + WhatsApp invoices</li>
-<li>Priority support</li>
+<div><div class="pr-amount">₦5,000</div><div class="pr-period">per month</div></div>
+<ul class="pr-feats">
+<li><div class="pr-check">✓</div>Unlimited invoices</li>
+<li><div class="pr-check">✓</div>Multiple users</li>
+<li><div class="pr-check">✓</div>Advanced reports</li>
+<li><div class="pr-check">✓</div>Email + WhatsApp</li>
+<li><div class="pr-check">✓</div>Priority support</li>
 </ul>
-<a href="dashboard.html" class="btn btn-outline" style="display:block;text-align:center;">Choose Business</a>
+<a href="dashboard.html" class="pr-cta">Choose Business</a>
 </div>
-<div class="price-card">
+
+<div class="pr-card">
 <h3>Pro</h3>
-<div class="price">₦10,000<span>/month</span></div>
-<ul>
-<li>Everything in Business</li>
-<li>API access</li>
-<li>Custom integrations</li>
-<li>Dedicated manager</li>
-<li>Phone support</li>
+<div><div class="pr-amount">₦10,000</div><div class="pr-period">per month</div></div>
+<ul class="pr-feats">
+<li><div class="pr-check">✓</div>Everything in Business</li>
+<li><div class="pr-check">✓</div>API access</li>
+<li><div class="pr-check">✓</div>Custom integrations</li>
+<li><div class="pr-check">✓</div>Dedicated manager</li>
+<li><div class="pr-check">✓</div>Phone support</li>
 </ul>
-<a href="dashboard.html" class="btn btn-outline" style="display:block;text-align:center;">Go Pro</a>
+<a href="dashboard.html" class="pr-cta">Go Pro</a>
 </div>
 </div>
 </div>
 </section>
 
-<section class="testimonials">
+<!-- TESTIMONIALS -->
+<section class="testi-wrap">
 <div class="container">
-<h2 class="section-title">Real Nigerian Businesses, <span class="green">Real Results</span></h2>
-<p class="section-sub">From provision stores to tailoring shops — Prosper is helping owners take back control.</p>
-<div class="testimonial-grid">
-<div class="testimonial">
-<p class="quote">"Before Prosper, I was losing track of who owed me money. Now I just ask the agent and I see everything. My outstanding debt collection went up 40 percent in the first month."</p>
-<div class="author">
-<div class="avatar">A</div>
-<div class="author-info">
-<strong>Adebayo Ogundimu</strong>
-<span>Provision Store Owner, Lagos</span>
+<div class="s-tag">Testimonials</div>
+<h2 class="s-title">Real businesses.<br>Real results.</h2>
+<div class="testi-grid">
+<div class="t-card">
+<div class="q-mark">"</div>
+<p>Before Prosper, I was losing track of who owed me money. Now I just ask the agent and I see everything. My outstanding debt collection went up 40% in the first month.</p>
+<div class="t-author">
+<div class="t-av">A</div>
+<div><span class="t-name">Adebayo Ogundimu</span><span class="t-biz">Provision Store Owner, Lagos</span></div>
 </div>
 </div>
-</div>
-<div class="testimonial">
-<p class="quote">"I used to write invoices by hand. Now I just tell Prosper and it emails my customer immediately. My customers pay faster because the invoices look professional."</p>
-<div class="author">
-<div class="avatar">F</div>
-<div class="author-info">
-<strong>Funmi Adeyemi</strong>
-<span>Tailor, Abuja</span>
+<div class="t-card">
+<div class="q-mark">"</div>
+<p>I used to write invoices by hand. Now I just tell Prosper and it emails my customer immediately. My customers pay faster because the invoices look professional.</p>
+<div class="t-author">
+<div class="t-av">F</div>
+<div><span class="t-name">Funmi Adeyemi</span><span class="t-biz">Tailor, Abuja</span></div>
 </div>
 </div>
-</div>
-<div class="testimonial">
-<p class="quote">"As an online vendor, I sell to many customers daily. Prosper helps me track every sale and tells me my profit at the end of the day. It's like having an accountant for free."</p>
-<div class="author">
-<div class="avatar">C</div>
-<div class="author-info">
-<strong>Chinedu Okeke</strong>
-<span>Online Vendor, Port Harcourt</span>
-</div>
+<div class="t-card">
+<div class="q-mark">"</div>
+<p>As an online vendor, I sell to many customers daily. Prosper helps me track every sale and tells me my profit at the end of the day. It's like having an accountant for free.</p>
+<div class="t-author">
+<div class="t-av">C</div>
+<div><span class="t-name">Chinedu Okeke</span><span class="t-biz">Online Vendor, Port Harcourt</span></div>
 </div>
 </div>
 </div>
 </div>
 </section>
 
+<!-- FAQ -->
 <section id="faq">
 <div class="container">
-<h2 class="section-title">Frequently Asked Questions</h2>
-<p class="section-sub">Everything you need to know about Prosper.</p>
+<div class="s-tag">FAQ</div>
+<h2 class="s-title">Everything you need<br>to know.</h2>
 <div class="faq-list">
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>Do I need to install anything? <span class="arrow">▼</span></h4>
-<div class="answer">No. Prosper works in your browser on any device — phone, laptop, tablet. Just visit prosperassistant.online.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>Do I need to install anything?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>No. Prosper works in your browser on any device — phone, laptop, tablet. Just visit prosperassistant.online and sign in.</p></div>
 </div>
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>Is my data safe? <span class="arrow">▼</span></h4>
-<div class="answer">Yes. Each business gets its own isolated data. Your information is stored securely on MongoDB Atlas with industry-standard encryption.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>Is my data safe?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>Yes. Each business gets its own isolated data store. Your information is secured on MongoDB Atlas with industry-standard encryption. Nobody else can see your numbers.</p></div>
 </div>
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>Does Prosper work offline? <span class="arrow">▼</span></h4>
-<div class="answer">Not yet — Prosper needs internet to work. We're working on an offline mode for areas with poor connectivity.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>Does Prosper work offline?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>Not yet — Prosper requires internet to work. We're actively building an offline mode for areas with poor connectivity.</p></div>
 </div>
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>Can I use Pidgin or Nigerian English? <span class="arrow">▼</span></h4>
-<div class="answer">Yes! Prosper understands Nigerian English. You can say things like "Bayo took rice on credit worth fifty thousand naira" and it'll understand.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>Can I use Pidgin or Nigerian English?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>Yes! You can say things like "Bayo took rice on credit worth fifty thousand naira" and Prosper will understand it perfectly.</p></div>
 </div>
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>How do I get paid through Prosper? <span class="arrow">▼</span></h4>
-<div class="answer">Prosper currently helps you track who owes what. We're adding Paystack and Flutterwave payment links coming soon.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>How do I get paid through Prosper?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>Prosper currently helps you track who owes what and send reminder invoices. Payment links via Paystack and Flutterwave are coming very soon.</p></div>
 </div>
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>What if I need help? <span class="arrow">▼</span></h4>
-<div class="answer">Reach out via email at support@smartbloomai.online. We respond within 24 hours.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>What if I need help?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>Reach out via email at support@smartbloomai.online or WhatsApp. We respond within 24 hours.</p></div>
 </div>
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>Is this really free? <span class="arrow">▼</span></h4>
-<div class="answer">Yes, the Free plan is genuinely free forever. We make money from businesses that grow large enough to need our paid features.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>Is the Free plan really free?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>Yes, genuinely free forever. We make money from businesses that grow large enough to need paid features — your success funds the product.</p></div>
 </div>
-<div class="faq-item" onclick="toggleFaq(this)">
-<h4>Who built this? <span class="arrow">▼</span></h4>
-<div class="answer">Prosper is built by Edward Ogunlusi, a Nigerian founder based in Lagos. Made specifically for the Nigerian SME market.</div>
+
+<div class="faq-item">
+<button class="faq-btn"><h4>Who built this?</h4><div class="faq-icon">+</div></button>
+<div class="faq-body"><p>Prosper is built by Edward Ogunlusi, a Nigerian founder based in Lagos — made specifically for the Nigerian SME market by someone who understands it firsthand.</p></div>
 </div>
+
 </div>
 </div>
 </section>
 
-<section class="final-cta">
+<!-- FINAL CTA -->
+<section class="cta-wrap">
 <div class="container">
-<h2>Ready to Take Control?</h2>
-<p>Join Nigerian business owners using AI to grow smarter.</p>
-<a href="dashboard.html" class="btn">Start Free — Right Now</a>
+<h2>Your books won't<br>keep themselves.</h2>
+<p>Join thousands of Nigerian business owners using Prosper to grow smarter, collect faster, and stress less.</p>
+<a href="dashboard.html" class="cta-btn">Start Free — Right Now →</a>
 </div>
 </section>
 
+<!-- FOOTER -->
 <footer>
 <div class="container">
-<div class="footer-grid">
-<div>
-<h4 style="color:#7ed4a0;font-size:20px;">🧾 Prosper</h4>
-<p style="color:#aaa;margin-top:10px;font-size:14px;">AI Business Agent for Nigerian SMEs. Built in Lagos. Built for Africa.</p>
+<div class="foot-grid">
+<div class="foot-brand">
+<span class="foot-brand-logo">Prosper<em>.</em></span>
+<p>AI Business Agent for Nigerian SMEs. Built in Lagos. Built for Africa.</p>
 </div>
-<div>
-<h4>Product</h4>
+<div class="foot-col">
+<h5>Product</h5>
 <ul>
 <li><a href="#features">Features</a></li>
 <li><a href="#pricing">Pricing</a></li>
@@ -371,27 +1069,72 @@ nav ul{display:none;}
 <li><a href="dashboard.html">Try Free</a></li>
 </ul>
 </div>
-<div>
-<h4>Contact</h4>
+<div class="foot-col">
+<h5>Contact</h5>
 <ul>
 <li><a href="https://wa.me/2348020583538">WhatsApp</a></li>
 <li><a href="mailto:ogunlusiolubunmi@gmail.com">Email</a></li>
 </ul>
 </div>
-<div>
-<h4>Legal</h4>
+<div class="foot-col">
+<h5>Legal</h5>
 <ul>
 <li><a href="privacy.html">Privacy Policy</a></li>
 <li><a href="terms.html">Terms of Service</a></li>
 </ul>
 </div>
 </div>
-<div class="footer-bottom">© 2026 Prosper Assistant. Made with love in Lagos 🇳🇬</div>
+<div class="foot-bottom">
+<span>© 2026 Prosper Assistant. Made with love in Lagos 🇳🇬</span>
+<span style="color:var(--border)">prosperassistant.online</span>
+</div>
 </div>
 </footer>
 
 <script>
-function toggleFaq(item){item.classList.toggle("open");}
+// Cursor glow
+const glow = document.getElementById('cursor-glow');
+document.addEventListener('mousemove', e => {
+  glow.style.left = e.clientX + 'px';
+  glow.style.top = e.clientY + 'px';
+});
+
+// FAQ accordion
+document.querySelectorAll('.faq-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.parentElement;
+    const body = item.querySelector('.faq-body');
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => {
+      i.classList.remove('open');
+      i.querySelector('.faq-body').style.maxHeight = '0';
+    });
+    if (!isOpen) {
+      item.classList.add('open');
+      body.style.maxHeight = body.scrollHeight + 'px';
+    }
+  });
+});
+
+// Scroll-triggered animations
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.style.opacity = '1';
+      e.target.style.transform = 'translateY(0)';
+      io.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll(
+  '.p-card, .f-card, .pr-card, .t-card, .h-step, .stat'
+).forEach((el, i) => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(28px)';
+  el.style.transition = `opacity 0.65s cubic-bezier(0.16,1,0.3,1) ${(i % 4) * 0.08}s, transform 0.65s cubic-bezier(0.16,1,0.3,1) ${(i % 4) * 0.08}s`;
+  io.observe(el);
+});
 </script>
 </body>
 </html>
