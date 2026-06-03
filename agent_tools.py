@@ -162,7 +162,39 @@ def log_sale(item, quantity, sale_amount, cost_amount, business_id="default"):
     return profit
 
 
-# ── 5. UPDATE CUSTOMER PHONE ────────────────────────
+# ── 5. UPDATE / DELETE SALE ────────────────────────
+def update_sale(sale_id, business_id, item=None, quantity=None, sale_amount=None, cost_amount=None, date=None):
+    """Update a sale record by its MongoDB _id string."""
+    from bson import ObjectId
+    db = get_db()
+    updates = {}
+    if item is not None: updates["item"] = item
+    if quantity is not None: updates["quantity"] = quantity
+    if sale_amount is not None: updates["sale_amount"] = sale_amount
+    if cost_amount is not None: updates["cost_amount"] = cost_amount
+    if date is not None: updates["date"] = date
+    if sale_amount is not None or cost_amount is not None:
+        sale = db["sales"].find_one({"_id": ObjectId(sale_id), "business_id": business_id})
+        if sale:
+            sa = updates.get("sale_amount", sale["sale_amount"])
+            ca = updates.get("cost_amount", sale["cost_amount"])
+            updates["profit"] = sa - ca
+    result = db["sales"].update_one(
+        {"_id": ObjectId(sale_id), "business_id": business_id},
+        {"$set": updates}
+    )
+    return "Sale updated successfully." if result.modified_count else "Sale not found or no changes made."
+
+
+def delete_sale(sale_id, business_id):
+    """Delete a sale record by its MongoDB _id string."""
+    from bson import ObjectId
+    db = get_db()
+    result = db["sales"].delete_one({"_id": ObjectId(sale_id), "business_id": business_id})
+    return "Sale deleted successfully." if result.deleted_count else "Sale not found."
+
+
+# ── 6. UPDATE CUSTOMER PHONE ────────────────────────
 def update_customer_phone(customer_name, customer_phone, business_id="default"):
     db = get_db()
     customers = db["customers"]

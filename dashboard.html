@@ -1251,13 +1251,18 @@ async function loadSales() {
     }
     document.getElementById("salesList").innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th style="text-align:right">Profit</th></tr></thead>
+        <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th style="text-align:right">Revenue</th><th style="text-align:right">Profit</th><th style="text-align:center">Actions</th></tr></thead>
         <tbody>${sales.map(s => `
           <tr>
             <td style="color:#6b7280;font-size:11px">${s.date}</td>
             <td>${esc(s.item)}</td>
             <td style="color:#6b7280">${s.quantity}</td>
+            <td style="text-align:right;color:#0d3d26;font-weight:600">NGN ${Math.round(s.sale_amount||0).toLocaleString()}</td>
             <td style="text-align:right;font-weight:700;color:#16a34a">NGN ${Math.round(s.profit).toLocaleString()}</td>
+            <td style="text-align:center;white-space:nowrap">
+              <button onclick="openEditSale('${s._id}','${esc(s.item)}',${s.quantity},${s.sale_amount||0},${s.cost_amount||0},'${s.date}')" style="background:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;margin-right:4px">Edit</button>
+              <button onclick="confirmDeleteSale('${s._id}','${esc(s.item)}')" style="background:#fff1f2;border:1px solid #fecdd3;color:#e11d48;padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer">Delete</button>
+            </td>
           </tr>`).join("")}
         </tbody>
       </table>`;
@@ -1631,6 +1636,101 @@ setInterval(() => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && window._uid) loadDash();
 });
+
+// ── Edit Sale Modal ──────────────────────────────────────────────
+function openEditSale(id, item, qty, revenue, cost, date) {
+  document.getElementById("editSaleId").value = id;
+  document.getElementById("editSaleItem").value = item;
+  document.getElementById("editSaleQty").value = qty;
+  document.getElementById("editSaleRevenue").value = revenue;
+  document.getElementById("editSaleCost").value = cost;
+  document.getElementById("editSaleDate").value = date;
+  document.getElementById("editSaleModal").style.display = "flex";
+}
+
+function closeEditSale() {
+  document.getElementById("editSaleModal").style.display = "none";
+}
+
+async function submitEditSale() {
+  const id = document.getElementById("editSaleId").value;
+  const btn = document.getElementById("editSaleSubmitBtn");
+  btn.disabled = true; btn.textContent = "Saving...";
+  try {
+    const headers = await authHeaders(true);
+    const r = await fetch(API + "/api/sales/update", {
+      method: "POST", headers,
+      body: JSON.stringify({
+        sale_id: id,
+        item: document.getElementById("editSaleItem").value,
+        quantity: parseInt(document.getElementById("editSaleQty").value) || 0,
+        sale_amount: parseFloat(document.getElementById("editSaleRevenue").value) || 0,
+        cost_amount: parseFloat(document.getElementById("editSaleCost").value) || 0,
+        date: document.getElementById("editSaleDate").value,
+      })
+    });
+    const d = await r.json();
+    if (d.success) { closeEditSale(); loadSales(); toast("Sale updated successfully"); }
+    else toast(d.error || "Failed to update sale", "error");
+  } catch(e) { toast("Connection error", "error"); }
+  btn.disabled = false; btn.textContent = "Save Changes";
+}
+
+async function confirmDeleteSale(id, item) {
+  if (!confirm(`Delete sale: "${item}"?\nThis cannot be undone.`)) return;
+  try {
+    const headers = await authHeaders(true);
+    const r = await fetch(API + "/api/sales/delete", {
+      method: "POST", headers,
+      body: JSON.stringify({ sale_id: id })
+    });
+    const d = await r.json();
+    if (d.success) { loadSales(); loadDash(); toast("Sale deleted"); }
+    else toast(d.error || "Failed to delete sale", "error");
+  } catch(e) { toast("Connection error", "error"); }
+}
 </script>
+
+<!-- Edit Sale Modal -->
+<div id="editSaleModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:14px;padding:24px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <h3 style="margin:0;font-size:16px;color:#1a1a2e">Edit Sale</h3>
+      <button onclick="closeEditSale()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280">&times;</button>
+    </div>
+    <input type="hidden" id="editSaleId">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div>
+        <label style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Item Name</label>
+        <input id="editSaleItem" type="text" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Quantity</label>
+          <input id="editSaleQty" type="number" min="1" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Date</label>
+          <input id="editSaleDate" type="date" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Revenue (NGN)</label>
+          <input id="editSaleRevenue" type="number" min="0" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase">Cost (NGN)</label>
+          <input id="editSaleCost" type="number" min="0" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button onclick="closeEditSale()" style="flex:1;padding:10px;border:1px solid #e5e7eb;border-radius:8px;background:white;cursor:pointer;font-size:14px;color:#6b7280">Cancel</button>
+      <button id="editSaleSubmitBtn" onclick="submitEditSale()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#0d3d26;color:white;cursor:pointer;font-size:14px;font-weight:600">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

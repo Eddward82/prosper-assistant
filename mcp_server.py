@@ -64,6 +64,25 @@ def record_sale(item: str, quantity: int, sale_amount: float, cost_amount: float
 
 
 @mcp.tool()
+def update_sale_record(sale_id: str, business_id: str = "default", item: str = "", quantity: int = 0, sale_amount: float = 0, cost_amount: float = 0) -> str:
+    """Update an existing sale record by its ID. Pass only the fields to change; leave others as 0 or empty."""
+    from agent_tools import update_sale
+    kwargs = {}
+    if item: kwargs["item"] = item
+    if quantity > 0: kwargs["quantity"] = quantity
+    if sale_amount > 0: kwargs["sale_amount"] = sale_amount
+    if cost_amount > 0: kwargs["cost_amount"] = cost_amount
+    return update_sale(sale_id, business_id, **kwargs)
+
+
+@mcp.tool()
+def delete_sale_record(sale_id: str, business_id: str = "default") -> str:
+    """Delete a sale record permanently by its ID."""
+    from agent_tools import delete_sale
+    return delete_sale(sale_id, business_id)
+
+
+@mcp.tool()
 def create_invoice(customer_name: str, customer_email: str, description: str, amount: float, business_name: str = "", business_id: str = "default", customer_phone: str = "") -> str:
     """Create and send an invoice to a customer via email for a specific business"""
     db = get_db()
@@ -845,8 +864,9 @@ async def sales_endpoint(request: Request):
         query["date"] = {"$gte": date_from, "$lte": date_to}
     elif date_from:
         query["date"] = {"$gte": date_from}
-    sales = list(db["sales"].find(query, {"_id": 0}).sort("date", -1))
+    sales = list(db["sales"].find(query).sort("date", -1))
     return JSONResponse({"sales": [{
+        "_id": str(s["_id"]),
         "date": s.get("date", ""),
         "item": s.get("item", ""),
         "quantity": s.get("quantity", 0),
@@ -966,6 +986,44 @@ async def delete_account_endpoint(request: Request):
     return JSONResponse({"success": True})
 
 
+async def update_sale_endpoint(request: Request):
+    uid = await _verify_firebase_token(request)
+    if not uid:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
+    sale_id = data.get("sale_id", "").strip()
+    if not sale_id:
+        return JSONResponse({"error": "Missing sale_id"}, status_code=400)
+    from agent_tools import update_sale
+    kwargs = {}
+    if data.get("item"): kwargs["item"] = data["item"]
+    if data.get("quantity"): kwargs["quantity"] = int(data["quantity"])
+    if data.get("sale_amount"): kwargs["sale_amount"] = float(data["sale_amount"])
+    if data.get("cost_amount") is not None: kwargs["cost_amount"] = float(data["cost_amount"])
+    if data.get("date"): kwargs["date"] = data["date"]
+    result = update_sale(sale_id, uid, **kwargs)
+    return JSONResponse({"success": True, "message": result})
+
+
+async def delete_sale_endpoint(request: Request):
+    uid = await _verify_firebase_token(request)
+    if not uid:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid request"}, status_code=400)
+    sale_id = data.get("sale_id", "").strip()
+    if not sale_id:
+        return JSONResponse({"error": "Missing sale_id"}, status_code=400)
+    from agent_tools import delete_sale
+    result = delete_sale(sale_id, uid)
+    return JSONResponse({"success": True, "message": result})
+
+
 app = mcp.http_app()
 app.routes.append(Route("/api/profile", get_profile_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/delete-account", delete_account_endpoint, methods=["POST", "OPTIONS"]))
@@ -975,6 +1033,8 @@ app.routes.append(Route("/api/chat", chat_endpoint, methods=["POST", "OPTIONS"])
 app.routes.append(Route("/api/agent-chat", agent_chat_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/customers", customers_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/sales", sales_endpoint, methods=["GET"]))
+app.routes.append(Route("/api/sales/update", update_sale_endpoint, methods=["POST", "OPTIONS"]))
+app.routes.append(Route("/api/sales/delete", delete_sale_endpoint, methods=["POST", "OPTIONS"]))
 ALLOWED_ORIGINS = [
     "https://prosperassistant.online",
     "https://www.prosperassistant.online",
