@@ -381,6 +381,7 @@ async def chat_endpoint(request: Request):
     profile = data.get("profile", {})
     business_id = profile.get("bizName", "default").lower().replace(" ", "-")
     business_name = profile.get("bizName", "Prosper Stores")
+    owner_name = profile.get("ownerName", "")
     db = get_db()
 
     # ── Handle pending email action (user replied with phone number) ──
@@ -606,6 +607,7 @@ async def chat_endpoint(request: Request):
     system_prompt = (
         f"You are Prosper Assistant, a business tool for Nigerian SMEs. "
         f"Business: {business_name} (ID: {business_id}). "
+        f"Owner's name: {owner_name}. When greeting the user, always use their first name from the owner name, not the business name. "
         f"Today's date: {__import__('datetime').datetime.now().strftime('%Y-%m-%d')}. "
         f"CRITICAL RULES — follow exactly:\n"
         f"1. ALWAYS call a function. Never reply with only text if a function fits.\n"
