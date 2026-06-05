@@ -68,18 +68,29 @@ window.sendOTP = async () => {
   let phone = raw.replace(/\s+/g, "");
   if (phone.startsWith("0")) phone = "+234" + phone.slice(1);
   if (!phone.startsWith("+")) phone = "+" + phone;
+  const btn = document.getElementById("sendOtpBtn");
+  btn.disabled = true; btn.textContent = "Sending...";
   try {
-    if (!window._recaptcha) {
-      window._recaptcha = new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
+    // Always destroy and recreate reCAPTCHA to avoid "already rendered" error
+    if (window._recaptcha) {
+      try { window._recaptcha.clear(); } catch(e) {}
+      window._recaptcha = null;
     }
+    // Reset the container
+    const container = document.getElementById("recaptcha-container");
+    container.innerHTML = "";
+    window._recaptcha = new RecaptchaVerifier(auth, "recaptcha-container", { size: "invisible" });
+    await window._recaptcha.render();
     window._confirmResult = await signInWithPhoneNumber(auth, phone, window._recaptcha);
     document.getElementById("otpSection").style.display = "block";
     document.getElementById("sendOtpBtn").style.display = "none";
     document.getElementById("phoneInput").disabled = true;
     showAuthError("OTP sent! Check your SMS.", "green");
   } catch(e) {
-    if (window._recaptcha) { window._recaptcha.clear(); window._recaptcha = null; }
-    showAuthError(e.message);
+    if (window._recaptcha) { try { window._recaptcha.clear(); } catch(_) {} window._recaptcha = null; }
+    document.getElementById("recaptcha-container").innerHTML = "";
+    btn.disabled = false; btn.textContent = "Send OTP";
+    showAuthError(e.message.includes("already been rendered") ? "Please try again." : e.message);
   }
 };
 
@@ -644,8 +655,8 @@ body{font-family:var(--font-body);background:var(--bg);min-height:100vh;color:va
         <svg width="22" height="22" viewBox="0 0 32 32"><text x="4" y="24" font-family="Georgia,serif" font-weight="700" font-size="22" fill="#22c55e">P</text></svg>
       </div>
       <div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#1a1a2e;">Prosper Assistant</div>
-        <div style="font-size:11px;color:#9ca3af;">AI Business Assistant for SMEs</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#1a1a2e !important;">Prosper Assistant</div>
+        <div style="font-size:11px;color:#9ca3af !important;">AI Business Assistant for SMEs</div>
       </div>
     </div>
 
