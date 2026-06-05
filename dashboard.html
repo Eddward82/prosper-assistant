@@ -97,9 +97,18 @@ window.sendOTP = async () => {
 window.verifyOTP = async () => {
   const code = document.getElementById("otpInput").value.trim();
   if (!code) return showAuthError("Enter the OTP code.");
+  const btn = document.querySelector("#otpSection button");
+  btn.disabled = true; btn.textContent = "Verifying...";
   try {
     await window._confirmResult.confirm(code);
-  } catch(e) { showAuthError("Invalid OTP. Try again."); }
+  } catch(e) {
+    btn.disabled = false; btn.textContent = "Verify OTP";
+    const msg = e.code === "auth/invalid-verification-code" ? "Wrong OTP code. Check your SMS and try again."
+      : e.code === "auth/code-expired" ? "OTP expired. Click Send OTP to get a new one."
+      : e.code === "auth/too-many-requests" ? "Too many attempts. Please wait a moment."
+      : "Verification failed: " + e.message;
+    showAuthError(msg);
+  }
 };
 
 // ── Email Sign-In ───────────────────────────────────────────
@@ -557,8 +566,8 @@ body{font-family:var(--font-body);background:var(--bg);min-height:100vh;color:va
 #authScreen{background:var(--bg)!important;}
 #authScreen > div{background:var(--card)!important;box-shadow:0 20px 60px rgba(0,0,0,0.5)!important;border:1px solid var(--border)!important;}
 #authScreen > div > div[style*="font-family:'Syne'"]{color:var(--text)!important;}
-#authScreen .auth-logo-row div[style*="font-family:'Syne'"]{color:#0d3d26!important;}
-.dark #authScreen .auth-logo-row div[style*="font-family:'Syne'"]{color:#22c55e!important;}
+#authLogoText{color:#0d3d26!important;}
+.dark #authLogoText{color:#22c55e!important;}
 #authScreen > div > div[style*="font-size:20px"]{color:var(--text)!important;}
 #authScreen > div > div[style*="font-size:13px"]{color:var(--text-2)!important;}
 #authScreen [style*="border:1.5px solid #e2e8f0"]{border-color:var(--border)!important;}
@@ -657,8 +666,8 @@ body{font-family:var(--font-body);background:var(--bg);min-height:100vh;color:va
         <svg width="22" height="22" viewBox="0 0 32 32"><text x="4" y="24" font-family="Georgia,serif" font-weight="700" font-size="22" fill="#22c55e">P</text></svg>
       </div>
       <div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#1a1a2e !important;">Prosper Assistant</div>
-        <div style="font-size:11px;color:#9ca3af !important;">AI Business Assistant for SMEs</div>
+        <div id="authLogoText" style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#0d3d26;">Prosper Assistant</div>
+        <div style="font-size:11px;color:#9ca3af;">AI Business Assistant for SMEs</div>
       </div>
     </div>
 
