@@ -11,14 +11,17 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
 // Show auth screen immediately if no saved profile exists — avoids flicker for new visitors
-// while keeping the dashboard visible instantly for returning users
+// Show dashboard immediately for returning users with a cached profile.
+// For new/signed-out users, onAuthStateChanged will show authScreen once Firebase resolves.
 (function() {
   const keys = Object.keys(localStorage).filter(k => k.startsWith("prosperProfile"));
   const hasProfile = keys.some(k => {
     try { const p = JSON.parse(localStorage.getItem(k)); return p && p.bizName; } catch(e) { return false; }
   });
+  // If no cached profile, keep everything hidden until Firebase auth resolves.
+  // A loading spinner is shown instead to avoid flicker.
   if (!hasProfile) document.addEventListener("DOMContentLoaded", function() {
-    document.getElementById("authScreen").style.display = "flex";
+    document.getElementById("authLoadingOverlay").style.display = "flex";
   });
 })();
 </script>
@@ -204,7 +207,8 @@ onAuthStateChanged(auth, async (user) => {
       }
     }
   } else {
-    // Only show auth screen if we're not mid-redirect and user hasn't been resolved yet
+    // Firebase resolved: no user signed in — hide loading overlay, show auth
+    document.getElementById("authLoadingOverlay").style.display = "none";
     if (_authResolved) {
       // This is a real sign-out
       document.getElementById("authScreen").style.display = "flex";
@@ -450,6 +454,7 @@ body{font-family:var(--font-body);background:var(--bg);min-height:100vh;color:va
 .toast.error{background:rgba(245,101,101,0.15);color:var(--red);border:1px solid rgba(245,101,101,0.25);}
 .toast.info{background:rgba(129,140,248,0.15);color:var(--indigo);border:1px solid rgba(129,140,248,0.2);}
 @keyframes toastIn{from{opacity:0;transform:translateY(10px) scale(0.97);}to{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes spin{to{transform:rotate(360deg);}}
 .dl-btn{font-size:10px;font-weight:700;color:var(--green);background:var(--green-dim);border:1px solid rgba(46,204,113,0.2);border-radius:6px;padding:4px 9px;cursor:pointer;font-family:var(--font-body);transition:all 0.15s;white-space:nowrap;margin-left:10px;flex-shrink:0;}
 .dl-btn:hover{background:var(--green);color:var(--sidebar);}
 
@@ -623,6 +628,12 @@ body{font-family:var(--font-body);background:var(--bg);min-height:100vh;color:va
 </style>
 </head>
 <body>
+
+<!-- AUTH LOADING OVERLAY — shown while Firebase resolves, hides flicker -->
+<div id="authLoadingOverlay" style="display:none;position:fixed;inset:0;background:#f0f2f5;z-index:300;align-items:center;justify-content:center;flex-direction:column;gap:12px;">
+  <div style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#0d3d26;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
+  <div style="font-size:13px;color:#6b7280;font-family:'Plus Jakarta Sans',sans-serif;">Loading...</div>
+</div>
 
 <!-- AUTH SCREEN -->
 <div id="authScreen" style="display:none;position:fixed;inset:0;background:#f0f2f5;z-index:200;align-items:center;justify-content:center;padding:16px;">
