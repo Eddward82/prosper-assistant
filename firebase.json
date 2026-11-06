@@ -5,7 +5,18 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "**/*.py",
+      "**/*.pyc",
+      "**/__pycache__/**",
+      "**/*.log",
+      "debug_*.png",
+      "dash_live.html",
+      "Dockerfile",
+      "requirements.txt",
+      "README.md",
+      "LICENSE",
+      "all_env.yaml"
     ],
     "cleanUrls": true,
     "rewrites": [

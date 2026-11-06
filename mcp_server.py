@@ -1,11 +1,14 @@
 from fastmcp import FastMCP
-from agent_tools import save_invoice, get_unpaid_invoices, log_sale, send_invoice_email, find_customer, update_customer_phone, get_db
+from agent_tools import save_invoice, get_unpaid_invoices, log_sale, send_invoice_email, find_customer, update_customer_phone, get_db, record_partial_payment, check_usage_limit, increment_usage
 from dotenv import load_dotenv
 import os
 import re
+import hmac
+import time
 import logging
-import google.generativeai as genai
-from google.generativeai.types import FunctionDeclaration, Tool
+from collections import defaultdict, deque
+from google import genai
+from google.genai import types as genai_types
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,45 @@ os.environ["FASTMCP_PORT"] = str(os.environ.get("PORT", 8080))
 
 mcp = FastMCP(name="Prosper Assistant")
 
+# Track whether we've already sent a deprecation alert this session to avoid spam
+_deprecation_alert_sent = False
+
+def _send_model_deprecation_alert(model_name: str, error_detail: str):
+    global _deprecation_alert_sent
+    if _deprecation_alert_sent:
+        return
+    _deprecation_alert_sent = True
+    try:
+        import httpx
+        api_key = os.getenv("RESEND_API_KEY")
+        alert_email = os.getenv("ALERT_EMAIL", "ogunlusiolubunmi@gmail.com")
+        if not api_key:
+            return
+        html = f"""<html><body style='font-family:Arial,sans-serif;color:#1a1a2e;max-width:600px;margin:auto'>
+<div style='background:#dc2626;padding:24px;border-radius:8px 8px 0 0'>
+  <h1 style='color:white;margin:0;font-size:20px'>⚠️ Prosper Assistant — Gemini Model Alert</h1>
+</div>
+<div style='padding:24px;border:1px solid #e8eaed;border-top:none;border-radius:0 0 8px 8px'>
+  <p>The Gemini model your app is using has been <strong>deprecated or is unavailable</strong>.</p>
+  <p><strong>Model:</strong> {model_name}</p>
+  <p><strong>Error:</strong> {error_detail[:300]}</p>
+  <p>To fix, run this command:</p>
+  <pre style='background:#f3f4f6;padding:12px;border-radius:6px;font-size:13px'>gcloud run services update prosper-assistant --region us-central1 --update-env-vars GEMINI_MODEL=gemini-2.5-flash-latest</pre>
+  <p>Check available models at: <a href='https://ai.google.dev/gemini-api/docs/models'>ai.google.dev/gemini-api/docs/models</a></p>
+  <p style='color:#666;font-size:13px'>Prosper Assistant Auto-Alert</p>
+</div>
+</body></html>"""
+        httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"from": "Prosper Assistant <invoices@prosperassistant.online>", "to": [alert_email],
+                  "subject": "⚠️ Action Required: Gemini model deprecated in Prosper Assistant", "html": html},
+            timeout=10,
+        )
+        logger.info("Deprecation alert email sent to %s", alert_email)
+    except Exception as ex:
+        logger.error("Failed to send deprecation alert: %s", ex)
+
 
 def _extract_phone(text: str) -> str | None:
     """Extract Nigerian phone number from text. Supports +234XXXXXXXXXX and 0XXXXXXXXXX."""
@@ -47,20 +89,24 @@ def _extract_phone(text: str) -> str | None:
 @mcp.tool()
 def check_unpaid_invoices(business_id: str = "default") -> str:
     """Get all unpaid invoices and customers who owe money for a specific business"""
+    import json
     unpaid = get_unpaid_invoices(business_id)
     if not unpaid:
-        return "No unpaid invoices. Everyone has paid!"
-    result = f"Found {len(unpaid)} unpaid invoices:\n"
-    for inv in unpaid:
-        result += f"- {inv['invoice_number']} | {inv['customer_name']} | NGN {inv['total_amount']:,}\n"
-    return result
+        return "UNPAID-TABLE:[]"
+    rows = [{"invoice_number": inv["invoice_number"], "customer": inv["customer_name"], "amount": inv["total_amount"]} for inv in unpaid]
+    return "UNPAID-TABLE:" + json.dumps(rows)
 
 
 @mcp.tool()
 def record_sale(item: str, quantity: int, sale_amount: float, cost_amount: float, business_id: str = "default") -> str:
     """Record a cash sale and calculate profit for a specific business"""
+    import json
+    blocked = check_usage_limit(business_id, "sale")
+    if blocked:
+        return blocked
+    increment_usage(business_id, "sale")
     profit = log_sale(item, quantity, sale_amount, cost_amount, business_id)
-    return f"Sale recorded! {quantity} {item} | Revenue: NGN {sale_amount:,} | Profit: NGN {profit:,}"
+    return "SALE-RECORDED:" + json.dumps({"item": item, "quantity": quantity, "revenue": sale_amount, "profit": profit})
 
 
 @mcp.tool()
@@ -85,6 +131,10 @@ def delete_sale_record(sale_id: str, business_id: str = "default") -> str:
 @mcp.tool()
 def create_invoice(customer_name: str, customer_email: str, description: str, amount: float, business_name: str = "", business_id: str = "default", customer_phone: str = "") -> str:
     """Create and send an invoice to a customer via email for a specific business"""
+    blocked = check_usage_limit(business_id, "invoice")
+    if blocked:
+        return blocked
+    increment_usage(business_id, "invoice")
     db = get_db()
     biz = db["businesses"].find_one({"business_id": business_id}) or {}
     business_name = biz.get("business_name") or business_name or "Prosper Stores"
@@ -98,6 +148,7 @@ def create_invoice(customer_name: str, customer_email: str, description: str, am
 @mcp.tool()
 def get_business_report(business_id: str = "default") -> str:
     """Get today's business summary for a specific business"""
+    import json
     from datetime import datetime
     db = get_db()
     today = datetime.now().strftime("%Y-%m-%d")
@@ -106,27 +157,24 @@ def get_business_report(business_id: str = "default") -> str:
     revenue = sum(s["sale_amount"] for s in sales)
     profit = sum(s["profit"] for s in sales)
     outstanding = sum(inv["total_amount"] for inv in unpaid)
-    return f"Today: {len(sales)} sales, NGN {revenue:,} revenue, NGN {profit:,} profit. {len(unpaid)} unpaid invoices = NGN {outstanding:,} outstanding"
+    return "TODAY-REPORT:" + json.dumps({
+        "sales": len(sales), "revenue": revenue, "profit": profit,
+        "unpaid_count": len(unpaid), "outstanding": outstanding
+    })
 
 
 @mcp.tool()
 def get_all_sales_summary(business_id: str = "default") -> str:
     """Get summary of ALL sales ever recorded for a specific business"""
+    import json
     db = get_db()
     all_sales = list(db["sales"].find({"business_id": business_id}, {"_id": 0}, sort=[("date", -1)]))
     if not all_sales:
-        return "No sales recorded yet."
+        return "SALES-TABLE:" + json.dumps({"total_revenue": 0, "total_profit": 0, "rows": []})
     total_revenue = sum(s["sale_amount"] for s in all_sales)
     total_profit = sum(s["profit"] for s in all_sales)
-    lines = f"SALES-TABLE:{len(all_sales)} sales | Revenue: NGN {total_revenue:,.0f} | Profit: NGN {total_profit:,.0f}\n"
-    for s in all_sales:
-        date = s.get("date", "—")
-        item = s.get("item", "—")
-        qty = s.get("quantity", 1)
-        revenue = s.get("sale_amount", 0)
-        profit = s.get("profit", 0)
-        lines += f"ROW:{date}|{qty} {item}|NGN {revenue:,.0f}|NGN {profit:,.0f}\n"
-    return lines
+    rows = [{"date": s.get("date","—"), "item": f"{s.get('quantity',1)} {s.get('item','—')}", "revenue": s.get("sale_amount",0), "profit": s.get("profit",0)} for s in all_sales]
+    return "SALES-TABLE:" + json.dumps({"total_revenue": total_revenue, "total_profit": total_profit, "rows": rows})
 
 
 @mcp.tool()
@@ -144,6 +192,7 @@ def get_sales_by_date(date: str, business_id: str = "default") -> str:
 @mcp.tool()
 def get_lifetime_business_report(business_id: str = "default") -> str:
     """Get complete lifetime business report for a specific business"""
+    import json
     db = get_db()
     all_sales = list(db["sales"].find({"business_id": business_id}, {"_id": 0}))
     total_revenue = sum(s["sale_amount"] for s in all_sales)
@@ -151,14 +200,14 @@ def get_lifetime_business_report(business_id: str = "default") -> str:
     all_invoices = list(db["invoice"].find({"business_id": business_id}, {"_id": 0}))
     paid_invoices = [inv for inv in all_invoices if inv.get("status") == "paid"]
     unpaid_invoices = [inv for inv in all_invoices if inv.get("status") == "unpaid"]
-    total_invoiced = sum(inv["total_amount"] for inv in all_invoices)
     total_paid = sum(inv["total_amount"] for inv in paid_invoices)
     total_outstanding = sum(inv["total_amount"] for inv in unpaid_invoices)
     total_customers = db["customers"].count_documents({"business_id": business_id})
-    return f"""LIFETIME REPORT:
-SALES: {len(all_sales)} transactions | Revenue NGN {total_revenue:,} | Profit NGN {total_profit:,}
-INVOICES: {len(all_invoices)} issued | Paid NGN {total_paid:,} | Outstanding NGN {total_outstanding:,}
-CUSTOMERS: {total_customers} total"""
+    return "LIFETIME-REPORT:" + json.dumps({
+        "sales_count": len(all_sales), "revenue": total_revenue, "profit": total_profit,
+        "invoices_count": len(all_invoices), "paid": total_paid, "outstanding": total_outstanding,
+        "customers": total_customers
+    })
 
 
 @mcp.tool()
@@ -186,24 +235,41 @@ def mark_invoice_as_paid(invoice_number: str, business_id: str = "default") -> s
         {**lookup, "business_id": business_id},
         {"$inc": {"total_paid": invoice["total_amount"], "outstanding_balance": -invoice["total_amount"]}}
     )
+    # Record payment as a sale so it counts toward revenue
+    cost_amount = invoice.get("cost_amount", 0)
+    db["sales"].insert_one({
+        "business_id": business_id,
+        "item": invoice["items"][0]["description"] if invoice.get("items") else customer_name,
+        "quantity": 1,
+        "sale_amount": invoice["total_amount"],
+        "cost_amount": cost_amount,
+        "profit": invoice["total_amount"] - cost_amount,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "source": "invoice",
+        "invoice_number": invoice_number,
+        "customer_name": customer_name,
+    })
     return f"Invoice {invoice_number} for {customer_name} (NGN {invoice['total_amount']:,}) marked PAID!"
 
 
 @mcp.tool()
 def get_customers(business_id: str = "default") -> str:
     """Get all customers with their phone numbers, emails, and balances for a specific business"""
+    import json
     db = get_db()
     customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
     if not customers:
         return "No customers found."
-    result = f"Found {len(customers)} customers:\n"
+    rows = []
     for c in customers:
-        name = c.get("customer_name", "Unknown")
-        phone = c.get("customer_phone", "no phone")
-        email = c.get("customer_email", "no email")
-        balance = c.get("outstanding_balance", 0)
-        result += f"- {name} | Phone: {phone} | Email: {email} | Owes: NGN {balance:,}\n"
-    return result
+        rows.append({
+            "name": c.get("customer_name", "Unknown"),
+            "phone": c.get("customer_phone", ""),
+            "email": c.get("customer_email", ""),
+            "owes": c.get("outstanding_balance", 0),
+            "paid": c.get("total_paid", 0),
+        })
+    return "CUSTOMERS-TABLE:" + json.dumps(rows)
 
 
 @mcp.tool()
@@ -229,15 +295,59 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(options={"projectId": "agentquest"})
 
 
-async def _verify_token(request: Request) -> str | None:
+async def _verify_token_claims(request: Request) -> dict | None:
+    """Verify the Firebase ID token and return its full decoded claims, or None."""
     header = request.headers.get("Authorization", "")
     if not header.startswith("Bearer "):
         return None
     try:
-        decoded = await asyncio.to_thread(fb_auth.verify_id_token, header[7:])
-        return decoded["uid"]
+        return await asyncio.to_thread(fb_auth.verify_id_token, header[7:])
     except Exception:
         return None
+
+
+async def _verify_token(request: Request) -> str | None:
+    claims = await _verify_token_claims(request)
+    return claims["uid"] if claims else None
+
+
+# ── RATE LIMITING (per-uid sliding window, in-memory per instance) ──
+_rate_buckets: dict[str, deque] = defaultdict(deque)
+
+def _rate_limited(key: str, limit: int, window_seconds: int = 60) -> bool:
+    """Returns True if this key has exceeded `limit` calls in the window."""
+    now = time.monotonic()
+    bucket = _rate_buckets[key]
+    while bucket and bucket[0] < now - window_seconds:
+        bucket.popleft()
+    if len(bucket) >= limit:
+        return True
+    bucket.append(now)
+    return False
+
+
+# ── MCP ENDPOINT AUTH ────────────────────────────────────────
+# The MCP tools accept an arbitrary business_id, so the /mcp endpoint must
+# never be reachable by untrusted callers. Only our own ADK agent, which
+# sends the shared internal key, may connect.
+MCP_INTERNAL_KEY = os.getenv("MCP_INTERNAL_KEY", "")
+if not MCP_INTERNAL_KEY:
+    logger.warning("MCP_INTERNAL_KEY is not set — the ADK agent will not be able to reach /mcp")
+
+
+class MCPAuthMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/mcp"):
+            headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
+            key = headers.get("x-internal-key", "")
+            if not (MCP_INTERNAL_KEY and hmac.compare_digest(key, MCP_INTERNAL_KEY)):
+                response = JSONResponse({"error": "Unauthorized"}, status_code=401)
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
 
 
 def _get_business_info(business_id: str) -> tuple:
@@ -253,7 +363,8 @@ async def dashboard_data(request: Request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     from datetime import datetime
     db = get_db()
-    business_id = request.query_params.get("business_id", "default")
+    # Tenant scope always comes from the verified token, never from the client
+    business_id = uid
     today = request.query_params.get("date") or datetime.now().strftime("%Y-%m-%d")
     todays_sales = list(db["sales"].find({"date": today, "business_id": business_id}, {"_id": 0}))
     all_sales = list(db["sales"].find({"business_id": business_id}, {"_id": 0}))
@@ -287,36 +398,38 @@ async def dashboard_data(request: Request):
 
 
 async def get_profile_endpoint(request: Request):
-    token_uid = await _verify_token(request)
-    if token_uid is None:
+    claims = await _verify_token_claims(request)
+    if claims is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    uid = request.query_params.get("uid", "").strip()
+    # The profile returned is always the caller's own — the uid comes from the
+    # verified token, not the query string.
+    uid = claims["uid"]
+    token_email = (claims.get("email") or "").strip().lower()
     biz_name = request.query_params.get("bizName", "").strip()
-    if not uid:
-        return JSONResponse({"error": "Missing uid"}, status_code=400)
     db = get_db()
     # Try by Firebase UID first
     biz = db["businesses"].find_one({"business_id": uid}, {"_id": 0})
-    # Fallback: match by business name (exact string match) for account recovery
-    if not biz and biz_name:
-        biz = db["businesses"].find_one(
-            {"business_name": biz_name},
-            {"_id": 0}
-        )
-        # Try case-insensitive if exact fails
-        if not biz:
-            import re
+    # Fallback for account recovery: match by business name, but only claim the
+    # business if its registered email matches the verified token email.
+    # Otherwise anyone could take over a business just by knowing its name.
+    if not biz and biz_name and token_email:
+        candidate = db["businesses"].find_one({"business_name": biz_name}, {"_id": 0})
+        if not candidate:
             safe_name = re.escape(biz_name)
-            biz = db["businesses"].find_one(
+            candidate = db["businesses"].find_one(
                 {"business_name": {"$regex": f"^{safe_name}$", "$options": "i"}},
                 {"_id": 0}
             )
+        if candidate and (candidate.get("business_email") or "").strip().lower() == token_email:
+            biz = candidate
     if not biz:
         return JSONResponse({"found": False})
-    # If found under old bizId, migrate to Firebase UID going forward
+    # If found under old bizId, migrate ALL data to the Firebase UID going forward
     old_biz_id = biz.get("business_id", "")
-    if old_biz_id != uid:
-        db["businesses"].update_one({"business_id": old_biz_id}, {"$set": {"business_id": uid}})
+    if old_biz_id and old_biz_id != uid:
+        for coll in ("businesses", "invoice", "sales", "customers", "plans",
+                     "pending_sales", "pending_disambig", "pending_email", "pending_invoice"):
+            db[coll].update_many({"business_id": old_biz_id}, {"$set": {"business_id": uid}})
     return JSONResponse({
         "found": True,
         "bizName": biz.get("business_name", ""),
@@ -344,9 +457,17 @@ async def register_business_endpoint(request: Request):
     if not business_name or not owner_name or not business_email:
         return JSONResponse({"error": "Missing required fields"}, status_code=400)
 
-    uid = data.get("uid", "").strip()
-    business_id = uid if uid else business_name.lower().replace(" ", "-")
+    # A user can only register/update the business belonging to their own token
+    business_id = uid
     db = get_db()
+
+    # Check email uniqueness — email must belong to only one business
+    email_clash = db["businesses"].find_one({
+        "business_email": business_email,
+        "business_id": {"$ne": business_id}
+    })
+    if email_clash:
+        return JSONResponse({"error": "This email is already registered to another business. Please use a different email."}, status_code=409)
 
     existing = db["businesses"].find_one({"business_id": business_id})
     if not existing:
@@ -370,6 +491,8 @@ async def chat_endpoint(request: Request):
     uid = await _verify_token(request)
     if uid is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if _rate_limited(f"chat:{uid}", limit=20):
+        return JSONResponse({"response": "You're sending messages too quickly. Please wait a moment and try again."}, status_code=429)
     import json
     try:
         body = await request.body()
@@ -379,7 +502,8 @@ async def chat_endpoint(request: Request):
     user_message = data.get("message", "")
     history = data.get("history", [])  # [{role, text}, ...]
     profile = data.get("profile", {})
-    business_id = profile.get("bizName", "default").lower().replace(" ", "-")
+    # Tenant scope always comes from the verified token, never from the client
+    business_id = uid
     business_name = profile.get("bizName", "Prosper Stores")
     owner_name = profile.get("ownerName", "")
     db = get_db()
@@ -416,6 +540,23 @@ async def chat_endpoint(request: Request):
                     result = f"Email {customer_email} saved for {customer_name}. No invoice found to send."
             return JSONResponse({"response": result})
 
+    # ── Handle pending invoice (user replied with phone number) ────
+    pending_invoice = db["pending_invoice"].find_one({"business_id": business_id})
+    if pending_invoice:
+        phone = _extract_phone(user_message)
+        if phone:
+            db["pending_invoice"].delete_many({"business_id": business_id})
+            customer_name = pending_invoice["customer_name"]
+            customer_email = pending_invoice.get("customer_email", "")
+            description = pending_invoice["description"]
+            amount = pending_invoice["amount"]
+            if customer_email:
+                result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, phone)
+            else:
+                invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, phone)
+                result = f"Invoice {invoice_number} created for {customer_name} - NGN {amount:,.0f}. No email on file, so I didn't send it."
+            return JSONResponse({"response": result})
+
     # ── Handle pending disambiguation (numbered selection) ──────
     pending_disambig = db["pending_disambig"].find_one({"business_id": business_id})
     if pending_disambig and user_message.strip() in ["1", "2", "3", "4"]:
@@ -449,6 +590,7 @@ async def chat_endpoint(request: Request):
             cost_amount = float(cost_numbers[0])
             if "k" in user_message.lower() and cost_amount < 1000:
                 cost_amount *= 1000
+            increment_usage(business_id, "sale")
             result = record_sale(pending["item"], pending["quantity"], pending["sale_amount"], cost_amount, business_id)
             db["pending_sales"].delete_one({"business_id": business_id})
             return JSONResponse({"response": result})
@@ -506,21 +648,21 @@ async def chat_endpoint(request: Request):
             return JSONResponse({"response": result})
 
     # ── Gemini function-calling intent router ────────────────────
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-    tools = Tool(function_declarations=[
-        FunctionDeclaration(
+    tools = genai_types.Tool(function_declarations=[
+        genai_types.FunctionDeclaration(
             name="create_invoice",
-            description="Create an invoice or credit sale for a customer. Use when a customer is buying on credit, owes money, or when the user wants to send an invoice.",
+            description="Create an invoice or credit sale for a customer. Call immediately with whatever info is available — do NOT ask for phone number first. Phone and email are optional.",
             parameters={"type": "object", "properties": {
                 "customer_name": {"type": "string", "description": "Full name of the customer"},
-                "customer_phone": {"type": "string", "description": "Nigerian phone number e.g. 08012345678"},
-                "customer_email": {"type": "string", "description": "Customer email address if provided, else empty string"},
+                "customer_phone": {"type": "string", "description": "Phone number if provided in the message, else empty string"},
+                "customer_email": {"type": "string", "description": "Email address if provided in the message, else empty string"},
                 "description": {"type": "string", "description": "What was sold or the invoice description"},
                 "amount": {"type": "number", "description": "Total invoice amount in Naira"},
-            }, "required": ["customer_name", "customer_phone", "description", "amount"]},
+            }, "required": ["customer_name", "description", "amount"]},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="record_sale",
             description="Record a completed cash sale. Use when items were sold and payment was received in full.",
             parameters={"type": "object", "properties": {
@@ -530,7 +672,7 @@ async def chat_endpoint(request: Request):
                 "cost_amount": {"type": "number", "description": "Total cost price. Use 0 if not mentioned — system will ask."},
             }, "required": ["item", "quantity", "sale_amount", "cost_amount"]},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="split_payment",
             description="Record a transaction where the customer paid part in cash and owes the rest on credit.",
             parameters={"type": "object", "properties": {
@@ -543,41 +685,56 @@ async def chat_endpoint(request: Request):
                 "balance_owed": {"type": "number", "description": "Amount still owed"},
             }, "required": ["customer_name", "customer_phone", "description", "total_amount", "cash_paid", "balance_owed"]},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="check_unpaid_invoices",
             description="Show all unpaid invoices and customers who owe money.",
             parameters={"type": "object", "properties": {
                 "business_id": {"type": "string", "description": "The business ID"}
             }},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="get_all_customers",
             description="Show all customers and their details including contact info and balances. Use when user asks to see customers, show customers, list customers, my customers, who are my customers.",
             parameters={"type": "object", "properties": {}},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="get_business_report",
             description="Get today's sales report, revenue and profit summary.",
             parameters={"type": "object", "properties": {}},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="get_lifetime_business_report",
             description="Get all-time lifetime business report including all sales and invoices.",
             parameters={"type": "object", "properties": {}},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="get_all_sales_summary",
             description="Get summary of all sales ever recorded.",
             parameters={"type": "object", "properties": {}},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="mark_invoice_paid",
-            description="Mark an invoice as paid. ONLY use when user explicitly says 'mark as paid', 'mark paid', 'payment received for INV-xxx'. Do NOT use when user just types an invoice number alone.",
+            description="Mark an invoice as FULLY paid. Use ONLY when user says customer paid in full, 'mark as paid', or 'payment received for INV-xxx' with no remaining balance.",
             parameters={"type": "object", "properties": {
                 "invoice_number": {"type": "string", "description": "Invoice number like INV-001"},
             }, "required": ["invoice_number"]},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
+            name="record_partial_payment",
+            description=(
+                "Record a payment against an existing invoice — partial or full. "
+                "Use when: (1) user says a customer paid an amount that is LESS than the invoice total (partial payment), "
+                "(2) user says there was a mistake and wants to correct how much was paid, "
+                "(3) user says customer paid X and still owes Y — use X as amount_paid. "
+                "This tool updates the invoice balance to the remaining amount owed. "
+                "Do NOT create a new invoice — update the existing one."
+            ),
+            parameters={"type": "object", "properties": {
+                "invoice_number": {"type": "string", "description": "The invoice number being paid against, e.g. INV-003"},
+                "amount_paid": {"type": "number", "description": "The amount the customer actually paid now"},
+            }, "required": ["invoice_number", "amount_paid"]},
+        ),
+        genai_types.FunctionDeclaration(
             name="update_customer_email",
             description="Update or add an email address for an existing customer. Use when user says '[name] email is ...' or 'send email to [name] at ...' or 'update [name] email'. Also use when user wants to send an invoice email to a customer who already has an invoice — save the email then resend.",
             parameters={"type": "object", "properties": {
@@ -587,7 +744,7 @@ async def chat_endpoint(request: Request):
                 "resend_invoice_number": {"type": "string", "description": "If user wants to send/resend an invoice after updating the email, include the invoice number here. Else empty string."},
             }, "required": ["customer_name", "customer_email"]},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="update_customer_phone",
             description="Update or add a phone number for an existing customer.",
             parameters={"type": "object", "properties": {
@@ -595,7 +752,7 @@ async def chat_endpoint(request: Request):
                 "customer_phone": {"type": "string"},
             }, "required": ["customer_name", "customer_phone"]},
         ),
-        FunctionDeclaration(
+        genai_types.FunctionDeclaration(
             name="resend_invoice",
             description="Resend an invoice email to a customer. Use when user says 'resend', 'send again', 'I didn't receive it' and provides an invoice number.",
             parameters={"type": "object", "properties": {
@@ -610,43 +767,51 @@ async def chat_endpoint(request: Request):
         f"Owner's name: {owner_name}. When greeting the user, always use their first name from the owner name, not the business name. "
         f"Today's date: {__import__('datetime').datetime.now().strftime('%Y-%m-%d')}. "
         f"CRITICAL RULES — follow exactly:\n"
-        f"1. ALWAYS call a function. Never reply with only text if a function fits.\n"
-        f"2. If the user gives a phone number after being asked for one, call update_customer_email with that phone number.\n"
+        f"1. ALWAYS call a function immediately. Never ask for more info before calling — call with what you have.\n"
+        f"2. create_invoice: call it immediately with name, description, amount. Do NOT ask for phone number. Phone is optional.\n"
         f"3. If the user gives an invoice number after being asked, call resend_invoice with it.\n"
         f"4. 'send invoice to NAME at EMAIL' → call update_customer_email with resend_invoice_number set to the most recent invoice for that customer (use empty string if unknown).\n"
-        f"5. Only ask ONE clarifying question maximum, then on the very next user reply — call the function.\n"
-        f"6. Nigerian phone numbers: 08012345678 → +2348012345678.\n"
-        f"7. Amounts like '20k' mean 20000.\n"
-        f"8. If cost price not mentioned for a sale, use 0.\n"
-        f"9. Respond in friendly Nigerian English only when NOT calling a function.\n"
-        f"10. CRITICAL: When a function returns data, show it EXACTLY as returned — do NOT reword, summarize or reformat it. "
-        f"Just add a brief friendly intro line before the data, then show the raw function result unchanged."
+        f"5. Nigerian phone numbers: 08012345678 → +2348012345678.\n"
+        f"6. Amounts like '20k' mean 20000.\n"
+        f"7. If cost price not mentioned for a sale, use 0.\n"
+        f"8. Respond in friendly Nigerian English only when NOT calling a function.\n"
+        f"9. CRITICAL: When a function returns data, show it EXACTLY as returned — do NOT reword, summarize or reformat it. "
+        f"Just add a brief friendly intro line before the data, then show the raw function result unchanged.\n"
+        f"10. PARTIAL PAYMENTS: When a user says a customer paid an amount but still owes a balance, "
+        f"NEVER create a new invoice. Instead call record_partial_payment with the invoice number and the amount paid."
     )
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash", tools=[tools], system_instruction=system_prompt)
-        # Collapse recent history into the current message so Gemini has full context
-        # but still produces a single function call rather than continuing the conversation
         if history:
             context_lines = []
-            for h in history[-6:]:  # last 3 turns
+            for h in history[-6:]:
                 role = "User" if h.get("role") == "user" else "Assistant"
                 context_lines.append(f"{role}: {h.get('text','')}")
             context_block = "\n".join(context_lines)
             full_message = f"Previous conversation:\n{context_block}\n\nUser now says: {user_message}\n\nBased on the full conversation above, call the appropriate function with all available details."
         else:
             full_message = user_message
-        response = model.generate_content(full_message)
+
+        response = client.models.generate_content(
+            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=full_message,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                tools=[tools],
+            )
+        )
 
         # Find the function call part if present
         fn = None
         args = {}
         plain_text = None
-        for part in response.candidates[0].content.parts:
+        candidates = response.candidates or []
+        parts = candidates[0].content.parts if candidates and candidates[0].content else []
+        for part in (parts or []):
             fc = getattr(part, "function_call", None)
             if fc and getattr(fc, "name", None):
                 fn = fc.name
-                args = dict(fc.args)
+                args = dict(fc.args) if fc.args else {}
                 break
             txt = getattr(part, "text", None)
             if txt:
@@ -661,15 +826,16 @@ async def chat_endpoint(request: Request):
             customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
             if not customers:
                 return JSONResponse({"response": "No customers found yet. Create an invoice or record a sale to add customers."})
-            result = f"Found {len(customers)} customers:\n"
+            rows = []
             for c in customers:
-                name = c.get("customer_name", "Unknown")
-                phone = c.get("customer_phone", "no phone")
-                email = c.get("customer_email", "no email")
-                balance = c.get("outstanding_balance", 0)
-                paid = c.get("total_paid", 0)
-                result += f"- **{name}** | Phone: {phone} | Email: {email} | Owes: NGN {balance:,} | Paid: NGN {paid:,}\n"
-            return JSONResponse({"response": result})
+                rows.append({
+                    "name": c.get("customer_name", "Unknown"),
+                    "phone": c.get("customer_phone", "no phone"),
+                    "email": c.get("customer_email", "no email"),
+                    "owes": c.get("outstanding_balance", 0),
+                    "paid": c.get("total_paid", 0),
+                })
+            return JSONResponse({"response": f"CUSTOMERS-TABLE:{__import__('json').dumps(rows)}"})
 
         elif fn == "check_unpaid_invoices":
             return JSONResponse({"response": check_unpaid_invoices(business_id)})
@@ -685,6 +851,9 @@ async def chat_endpoint(request: Request):
 
         elif fn == "mark_invoice_paid":
             result = mark_invoice_as_paid(args["invoice_number"].upper(), business_id)
+
+        elif fn == "record_partial_payment":
+            result = record_partial_payment(args["invoice_number"], float(args["amount_paid"]), business_id)
 
         elif fn == "update_customer_phone":
             phone = _extract_phone(args["customer_phone"]) or args["customer_phone"]
@@ -749,7 +918,10 @@ async def chat_endpoint(request: Request):
             quantity = int(args.get("quantity", 1))
             sale_amount = float(args["sale_amount"])
             cost_amount = float(args.get("cost_amount", 0))
-            if cost_amount == 0:
+            blocked = check_usage_limit(business_id, "sale")
+            if blocked:
+                result = blocked
+            elif cost_amount == 0:
                 db["pending_sales"].update_one(
                     {"business_id": business_id},
                     {"$set": {"business_id": business_id, "item": item, "quantity": quantity, "sale_amount": sale_amount}},
@@ -757,38 +929,41 @@ async def chat_endpoint(request: Request):
                 )
                 result = f"Got it! {quantity} {item} sold for NGN {sale_amount:,.0f}. What was your cost price so I can calculate profit?"
             else:
+                increment_usage(business_id, "sale")
                 result = record_sale(item, quantity, sale_amount, cost_amount, business_id)
 
         elif fn == "create_invoice":
-            customer_name = args["customer_name"]
-            customer_phone = _extract_phone(args.get("customer_phone", "")) or args.get("customer_phone", "")
-            customer_email = args.get("customer_email", "")
-            description = args["description"]
-            amount = float(args["amount"])
-
-            cust_doc, ambiguous, matches = find_customer(customer_name, business_id, customer_phone, customer_email)
-            if ambiguous:
-                options = "\n".join(
-                    f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone','no phone')} | Email: {m.get('customer_email','no email')}"
-                    for i, m in enumerate(matches)
-                )
-                db["pending_disambig"].update_one(
-                    {"business_id": business_id},
-                    {"$set": {"business_id": business_id, "action": "invoice", "description": description, "amount": amount, "matches": matches}},
-                    upsert=True
-                )
-                result = f"I found {len(matches)} customers named {customer_name}. Which one?\n{options}\nReply with 1 or 2."
+            blocked = check_usage_limit(business_id, "invoice")
+            if blocked:
+                result = blocked
             else:
-                if cust_doc:
-                    customer_phone = customer_phone or cust_doc.get("customer_phone", "")
-                    customer_email = customer_email or cust_doc.get("customer_email", "")
-                if not customer_phone:
-                    result = f"Please include {customer_name}'s phone number. Example: '{customer_name} 08012345678'"
-                elif customer_email:
-                    result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
+                customer_name = args["customer_name"]
+                customer_phone = _extract_phone(args.get("customer_phone", "")) or args.get("customer_phone", "")
+                customer_email = args.get("customer_email", "")
+                description = args["description"]
+                amount = float(args["amount"])
+                cust_doc, ambiguous, matches = find_customer(customer_name, business_id, customer_phone, customer_email)
+                if ambiguous:
+                    options = "\n".join(
+                        f"  {i+1}. {m['customer_name']} | Phone: {m.get('customer_phone','no phone')} | Email: {m.get('customer_email','no email')}"
+                        for i, m in enumerate(matches)
+                    )
+                    db["pending_disambig"].update_one(
+                        {"business_id": business_id},
+                        {"$set": {"business_id": business_id, "action": "invoice", "description": description, "amount": amount, "matches": matches}},
+                        upsert=True
+                    )
+                    result = f"I found {len(matches)} customers named {customer_name}. Which one?\n{options}\nReply with 1 or 2."
                 else:
-                    invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
-                    result = f"Invoice {invoice_number} created for {customer_name} - NGN {amount:,.0f}. No email on file, so I didn't send it."
+                    if cust_doc:
+                        customer_phone = customer_phone or cust_doc.get("customer_phone", "")
+                        customer_email = customer_email or cust_doc.get("customer_email", "")
+                    increment_usage(business_id, "invoice")
+                    if customer_email:
+                        result = create_invoice(customer_name, customer_email, description, amount, business_name, business_id, customer_phone)
+                    else:
+                        invoice_number = save_invoice(customer_name, "", [{"description": description, "amount": amount}], amount, business_name, business_id, customer_phone)
+                        result = f"Invoice {invoice_number} created for {customer_name} - NGN {amount:,.0f}. No email on file, so I didn't send it."
 
         elif fn == "split_payment":
             customer_name = args["customer_name"]
@@ -831,6 +1006,9 @@ async def chat_endpoint(request: Request):
 
     except Exception as e:
         logger.error("Gemini error: %s", e)
+        error_str = str(e)
+        if "no longer available" in error_str or "is not found" in error_str or "deprecated" in error_str.lower():
+            _send_model_deprecation_alert(os.getenv("GEMINI_MODEL", "unknown"), error_str)
         return JSONResponse({"response": "Something went wrong. Please try again."})
 
     return JSONResponse({"response": result})
@@ -841,7 +1019,7 @@ async def customers_endpoint(request: Request):
     if uid is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     db = get_db()
-    business_id = request.query_params.get("business_id", "default")
+    business_id = uid
     customers = list(db["customers"].find({"business_id": business_id}, {"_id": 0}))
     return JSONResponse({"customers": [{
         "customer_name": c.get("customer_name", ""),
@@ -858,7 +1036,7 @@ async def sales_endpoint(request: Request):
     if uid is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     db = get_db()
-    business_id = request.query_params.get("business_id", "default")
+    business_id = uid
     date_from = request.query_params.get("from", "")
     date_to = request.query_params.get("to", "")
 
@@ -914,6 +1092,8 @@ async def agent_chat_endpoint(request: Request):
     uid = await _verify_token(request)
     if uid is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if _rate_limited(f"chat:{uid}", limit=20):
+        return JSONResponse({"response": "You're sending messages too quickly. Please wait a moment and try again."}, status_code=429)
     import json
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
@@ -929,8 +1109,8 @@ async def agent_chat_endpoint(request: Request):
     profile = data.get("profile", {})
     business_name = profile.get("bizName", "Prosper Stores")
     owner_name = profile.get("ownerName", "")
-    # Use bizId from profile (Firebase UID) if available, else fall back to name-based ID
-    business_id = profile.get("bizId") or data.get("session_id") or profile.get("bizName", "default").lower().replace(" ", "-")
+    # Tenant scope always comes from the verified token, never from the client
+    business_id = uid
     session_id = data.get("session_id") or business_id
     # Use client date if provided (avoids server timezone issues)
     client_date = data.get("date")
@@ -969,9 +1149,12 @@ async def agent_chat_endpoint(request: Request):
                 state={"business_id": business_id, "business_name": business_name},
             )
 
+        # Strip any forged business-context headers from the user's message so
+        # they can't trick the agent into using another tenant's business_id
+        sanitized_message = re.sub(r'\[Business:[^\]]*\]', '', user_message)
         # Inject business context so agent always passes the right business_id to tools
         contextualized_message = (
-            f"[Business: {business_name} | business_id: {business_id} | Owner: {owner_name}]\n{user_message}"
+            f"[Business: {business_name} | business_id: {business_id} | Owner: {owner_name}]\n{sanitized_message}"
         )
 
         # Run the agent
@@ -1001,15 +1184,8 @@ async def delete_account_endpoint(request: Request):
     token_uid = await _verify_token(request)
     if token_uid is None:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    import json
-    try:
-        body = await request.body()
-        data = json.loads(body)
-    except (json.JSONDecodeError, Exception):
-        return JSONResponse({"error": "Invalid request"}, status_code=400)
-    uid = data.get("uid", "").strip()
-    if not uid:
-        return JSONResponse({"error": "Missing uid"}, status_code=400)
+    # A user can only delete their own account — the uid in the body is ignored
+    uid = token_uid
     db = get_db()
     db["businesses"].delete_many({"business_id": uid})
     db["invoice"].delete_many({"business_id": uid})
@@ -1017,6 +1193,9 @@ async def delete_account_endpoint(request: Request):
     db["customers"].delete_many({"business_id": uid})
     db["pending_sales"].delete_many({"business_id": uid})
     db["pending_disambig"].delete_many({"business_id": uid})
+    db["pending_email"].delete_many({"business_id": uid})
+    db["pending_invoice"].delete_many({"business_id": uid})
+    db["plans"].delete_many({"business_id": uid})
     return JSONResponse({"success": True})
 
 
@@ -1058,7 +1237,112 @@ async def delete_sale_endpoint(request: Request):
     return JSONResponse({"success": True, "message": result})
 
 
-app = mcp.http_app()
+async def plan_endpoint(request: Request):
+    uid = await _verify_token(request)
+    if not uid:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    from agent_tools import get_plan, _reset_month_if_needed, FREE_LIMITS
+    _reset_month_if_needed(uid)
+    plan = get_plan(uid)
+    return JSONResponse({
+        "plan": plan.get("plan", "free"),
+        "invoices_used": plan.get("invoices_used", 0),
+        "sales_used": plan.get("sales_used", 0),
+        "invoices_limit": None if plan.get("plan") == "business" else FREE_LIMITS["invoices"],
+        "sales_limit": None if plan.get("plan") == "business" else FREE_LIMITS["sales"],
+    })
+
+
+async def create_payment_endpoint(request: Request):
+    uid = await _verify_token(request)
+    if not uid:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if _rate_limited(f"payment:{uid}", limit=5):
+        return JSONResponse({"error": "Too many payment attempts. Please wait a moment."}, status_code=429)
+    import httpx as _httpx
+    secret = os.getenv("PAYSTACK_SECRET_KEY", "")
+    db = get_db()
+    biz = db["businesses"].find_one({"business_id": uid}, {"business_email": 1, "business_name": 1}) or {}
+    email = biz.get("business_email", "")
+    payload = {
+        "email": email,
+        "amount": 300000,
+        "currency": "NGN",
+        "metadata": {"business_id": uid},
+        "callback_url": "https://www.prosperassistant.online/dashboard",
+        "channels": ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer"],
+    }
+    async with _httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://api.paystack.co/transaction/initialize",
+            json=payload,
+            headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
+            timeout=15,
+        )
+    data = resp.json()
+    if not data.get("status"):
+        return JSONResponse({"error": data.get("message", "Payment init failed")}, status_code=500)
+    return JSONResponse({"authorization_url": data["data"]["authorization_url"]})
+
+
+async def paystack_webhook_endpoint(request: Request):
+    import hashlib, json as _json
+    secret = os.getenv("PAYSTACK_SECRET_KEY", "")
+    body = await request.body()
+    sig = request.headers.get("x-paystack-signature", "")
+    expected = hmac.new(secret.encode(), body, hashlib.sha512).hexdigest()
+    if not (secret and hmac.compare_digest(sig, expected)):
+        return JSONResponse({"error": "Invalid signature"}, status_code=400)
+    event = _json.loads(body)
+    event_type = event.get("event", "")
+    # Handle charge.success, invoice.payment_success, subscription.create
+    if event_type in ("charge.success", "invoice.payment_success", "subscription.create"):
+        data = event.get("data", {})
+        metadata = data.get("metadata", {})
+        db = get_db()
+        # 1. Try metadata business_id
+        business_id = metadata.get("business_id", "")
+        # 2. Try reference field — only if it looks like a Firebase UID (not a Paystack ref)
+        if not business_id:
+            ref = data.get("reference", "")
+            if ref and len(ref) >= 20 and not ref.startswith("T") and not ref.isdigit():
+                business_id = ref
+        # 3. Fall back to customer email — works since email is unique per business
+        if not business_id:
+            customer_email = (
+                data.get("customer", {}).get("email", "") or
+                data.get("subscription", {}).get("email_token", "")
+            )
+            if not customer_email:
+                # invoice.payment_success nests customer differently
+                customer_email = data.get("customer", {}).get("email", "")
+            if customer_email:
+                biz = db["businesses"].find_one({"business_email": customer_email}, {"business_id": 1})
+                if biz:
+                    business_id = biz.get("business_id", "")
+        if business_id:
+            db["plans"].update_one(
+                {"business_id": business_id},
+                {"$set": {"plan": "business"}},
+                upsert=True,
+            )
+            logger.info(f"Upgraded business {business_id} to Business plan via {event_type}")
+        else:
+            logger.warning(f"Paystack webhook ({event_type}): could not identify business. Customer: {data.get('customer', {})}")
+    return JSONResponse({"status": "ok"})
+
+
+# FastMCP's host guard defaults to localhost only, which 421s every request
+# that arrives with our real Cloud Run / domain Host header (this was silently
+# rejecting Paystack webhooks and all /api calls in production). Allow the
+# hostnames we actually serve on; the guard still blocks unknown hosts.
+app = mcp.http_app(
+    allowed_hosts=[
+        "prosperassistant.online",
+        "www.prosperassistant.online",
+        "*.run.app",
+    ]
+)
 app.routes.append(Route("/api/profile", get_profile_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/delete-account", delete_account_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/register", register_business_endpoint, methods=["POST", "OPTIONS"]))
@@ -1069,6 +1353,9 @@ app.routes.append(Route("/api/customers", customers_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/sales", sales_endpoint, methods=["GET"]))
 app.routes.append(Route("/api/sales/update", update_sale_endpoint, methods=["POST", "OPTIONS"]))
 app.routes.append(Route("/api/sales/delete", delete_sale_endpoint, methods=["POST", "OPTIONS"]))
+app.routes.append(Route("/api/plan", plan_endpoint, methods=["GET", "OPTIONS"]))
+app.routes.append(Route("/api/create-payment", create_payment_endpoint, methods=["POST", "OPTIONS"]))
+app.routes.append(Route("/api/paystack-webhook", paystack_webhook_endpoint, methods=["POST"]))
 ALLOWED_ORIGINS = [
     "https://prosperassistant.online",
     "https://www.prosperassistant.online",
@@ -1077,6 +1364,7 @@ ALLOWED_ORIGINS = [
     "http://localhost:5000",
     "http://127.0.0.1:5000",
 ]
+app.add_middleware(MCPAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

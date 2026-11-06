@@ -1,12 +1,21 @@
 from google.adk.agents import LlmAgent
-from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+try:
+    from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
+except ImportError:
+    from google.adk.tools.mcp_tool.mcp_session_manager import SseServerParams as StreamableHTTPConnectionParams
+try:
+    from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+except ImportError:
+    from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset as McpToolset
 from google.adk.tools import agent_tool
 from google.adk.tools.google_search_tool import GoogleSearchTool
 from google.adk.tools import url_context
 import os
 
 MCP_URL = os.getenv("MCP_URL", "https://prosper-assistant-666245775274.us-central1.run.app/mcp")
+# Shared secret proving this agent is the server's own trusted MCP client.
+# The /mcp endpoint rejects any request without it.
+MCP_INTERNAL_KEY = os.getenv("MCP_INTERNAL_KEY", "")
 
 prosper_assistant_google_search_agent = LlmAgent(
     name='Prosper_Assistant_google_search_agent',
@@ -90,7 +99,10 @@ When user says "mark INV-XXX as paid" → use mark_invoice_as_paid with that inv
         agent_tool.AgentTool(agent=prosper_assistant_google_search_agent),
         agent_tool.AgentTool(agent=prosper_assistant_url_context_agent),
         McpToolset(
-            connection_params=StreamableHTTPConnectionParams(url=MCP_URL),
+            connection_params=StreamableHTTPConnectionParams(
+                url=MCP_URL,
+                headers={"x-internal-key": MCP_INTERNAL_KEY},
+            ),
         ),
     ],
 )

@@ -1,6 +1,7 @@
 from pymongo import MongoClient, ReturnDocument
 from datetime import datetime
 from dotenv import load_dotenv
+from html import escape as _esc
 import os
 import logging
 import httpx
@@ -23,13 +24,100 @@ logger = logging.getLogger(__name__)
 
 _client = None
 _db = None
+_db_uri = None
 
 def get_db():
-    global _client, _db
-    if _db is None:
-        _client = MongoClient(os.getenv("MONGODB_URI"))
-        _db = _client[os.getenv("DB_NAME")]
+    global _client, _db, _db_uri
+    uri = os.getenv("MONGODB_URI", "")
+    db_name = os.getenv("DB_NAME", "")
+    if _db is None or uri != _db_uri:
+        if _client is not None:
+            try:
+                _client.close()
+            except Exception:
+                pass
+        _client = MongoClient(uri)
+        _db = _client[db_name]
+        _db_uri = uri
+        _ensure_indexes(_db)
     return _db
+
+
+def _ensure_indexes(db):
+    """Create the indexes every query path relies on. Idempotent."""
+    try:
+        db["sales"].create_index([("business_id", 1), ("date", -1)])
+        db["invoice"].create_index([("business_id", 1), ("status", 1)])
+        db["invoice"].create_index([("business_id", 1), ("invoice_number", 1)])
+        db["customers"].create_index([("business_id", 1), ("customer_name", 1)])
+        db["businesses"].create_index("business_id")
+        db["businesses"].create_index("business_email")
+        db["plans"].create_index("business_id")
+    except Exception as e:
+        logger.warning("Could not create indexes: %s", e)
+
+
+# ── PLAN / USAGE HELPERS ────────────────────────────
+
+FREE_LIMITS = {"invoices": 5, "sales": 5}
+UPGRADE_URL = os.getenv("PAYSTACK_PAYMENT_LINK", "#upgrade")
+
+def get_plan(business_id: str) -> dict:
+    """Return the plan doc for a business, creating a free plan if missing."""
+    db = get_db()
+    plan = db["plans"].find_one({"business_id": business_id})
+    if not plan:
+        month = datetime.now().strftime("%Y-%m")
+        plan = {
+            "business_id": business_id,
+            "plan": "free",
+            "month": month,
+            "invoices_used": 0,
+            "sales_used": 0,
+        }
+        db["plans"].insert_one(plan)
+    return plan
+
+def _reset_month_if_needed(business_id: str):
+    """Reset monthly counters if we're in a new month."""
+    db = get_db()
+    current_month = datetime.now().strftime("%Y-%m")
+    db["plans"].update_one(
+        {"business_id": business_id, "month": {"$ne": current_month}},
+        {"$set": {"month": current_month, "invoices_used": 0, "sales_used": 0}},
+    )
+
+def check_usage_limit(business_id: str, action: str) -> str | None:
+    """
+    Check if a free user has hit their limit.
+    action: "invoice" or "sale"
+    Returns an error string if blocked, None if allowed.
+    """
+    _reset_month_if_needed(business_id)
+    plan = get_plan(business_id)
+    if plan.get("plan") == "business":
+        return None
+    key = "invoices_used" if action == "invoice" else "sales_used"
+    limit = FREE_LIMITS["invoices"] if action == "invoice" else FREE_LIMITS["sales"]
+    used = plan.get(key, 0)
+    if used >= limit:
+        action_label = "invoices" if action == "invoice" else "cash sales"
+        return (
+            f"You've used all {limit} free {action_label} this month. "
+            f"Upgrade to the Business plan for unlimited access. "
+            f"UPGRADE_LINK:{UPGRADE_URL}"
+        )
+    return None
+
+def increment_usage(business_id: str, action: str):
+    """Increment the monthly usage counter for a given action."""
+    db = get_db()
+    key = "invoices_used" if action == "invoice" else "sales_used"
+    db["plans"].update_one(
+        {"business_id": business_id},
+        {"$inc": {key: 1}},
+        upsert=True,
+    )
 
 
 # ── 1. SAVE AN INVOICE ──────────────────────────────
@@ -194,6 +282,60 @@ def delete_sale(sale_id, business_id):
     return "Sale deleted successfully." if result.deleted_count else "Sale not found."
 
 
+# ── 5b. RECORD PARTIAL PAYMENT ON AN INVOICE ───────────────
+def record_partial_payment(invoice_number: str, amount_paid: float, business_id: str) -> str:
+    """
+    Record a partial or full payment against an existing unpaid invoice.
+    - If amount_paid >= invoice total: marks invoice as fully paid.
+    - If amount_paid < invoice total: reduces the invoice amount to the remaining balance.
+    Updates the customer's outstanding_balance and total_paid accordingly.
+    """
+    db = get_db()
+    invoice_number = invoice_number.upper().strip()
+    invoice = db["invoice"].find_one({"invoice_number": invoice_number, "business_id": business_id})
+    if not invoice:
+        return f"Invoice {invoice_number} not found."
+    if invoice.get("status") == "paid":
+        return f"Invoice {invoice_number} is already fully paid."
+
+    total = invoice["total_amount"]
+    remaining = total - amount_paid
+    customer_name = invoice.get("customer_name", "")
+    customer_phone = invoice.get("customer_phone", "")
+    customer_email = invoice.get("customer_email", "")
+    lookup = _customer_lookup(customer_name, customer_email, customer_phone, business_id)
+
+    if amount_paid >= total:
+        # Full payment
+        db["invoice"].update_one(
+            {"invoice_number": invoice_number, "business_id": business_id},
+            {"$set": {"status": "paid", "date_paid": datetime.now().strftime("%Y-%m-%d")}}
+        )
+        db["customers"].update_one(
+            {**lookup, "business_id": business_id},
+            {"$inc": {"total_paid": total, "outstanding_balance": -total}}
+        )
+        return f"Invoice {invoice_number} fully paid! NGN {total:,} received from {customer_name}."
+    else:
+        # Partial payment — reduce invoice to remaining balance
+        db["invoice"].update_one(
+            {"invoice_number": invoice_number, "business_id": business_id},
+            {"$set": {
+                "total_amount": remaining,
+                "items": [{"description": invoice["items"][0]["description"] if invoice.get("items") else "Balance", "amount": remaining}],
+                "amount_paid_so_far": invoice.get("amount_paid_so_far", 0) + amount_paid
+            }}
+        )
+        db["customers"].update_one(
+            {**lookup, "business_id": business_id},
+            {"$inc": {"total_paid": amount_paid, "outstanding_balance": -amount_paid}}
+        )
+        return (
+            f"Partial payment of NGN {amount_paid:,} recorded for {customer_name}.\n"
+            f"Invoice {invoice_number} updated — new balance: NGN {remaining:,}."
+        )
+
+
 # ── 6. UPDATE CUSTOMER PHONE ────────────────────────
 def update_customer_phone(customer_name, customer_phone, business_id="default"):
     db = get_db()
@@ -235,18 +377,24 @@ def _send_via_resend(to: str, subject: str, html: str, reply_to: str = "") -> bo
 
 
 def send_invoice_email(customer_name, customer_email, invoice_number, items, total_amount, business_name, business_email=""):
+    # Escape everything user-supplied in the HTML — these emails go out from
+    # our domain, so unescaped HTML here is a phishing vector. The plain-text
+    # subject stays unescaped.
+    safe_customer = _esc(str(customer_name))
+    safe_business = _esc(str(business_name))
+    safe_biz_email = _esc(str(business_email))
     items_html = "".join(
-        f"<tr><td style='padding:8px;border-bottom:1px solid #eee'>{item['description']}</td>"
+        f"<tr><td style='padding:8px;border-bottom:1px solid #eee'>{_esc(str(item['description']))}</td>"
         f"<td style='padding:8px;border-bottom:1px solid #eee;text-align:right'>NGN {item['amount']:,}</td></tr>"
         for item in items
     )
-    contact_line = f"<p>To contact us, reply to this email or reach us at <a href='mailto:{business_email}'>{business_email}</a>.</p>" if business_email else ""
+    contact_line = f"<p>To contact us, reply to this email or reach us at <a href='mailto:{safe_biz_email}'>{safe_biz_email}</a>.</p>" if business_email else ""
     html = f"""<html><body style='font-family:Arial,sans-serif;color:#1a1a2e;max-width:600px;margin:auto'>
 <div style='background:#0d3d26;padding:24px;border-radius:8px 8px 0 0'>
-  <h1 style='color:white;margin:0;font-size:22px'>Invoice from {business_name}</h1>
+  <h1 style='color:white;margin:0;font-size:22px'>Invoice from {safe_business}</h1>
 </div>
 <div style='padding:24px;border:1px solid #e8eaed;border-top:none;border-radius:0 0 8px 8px'>
-  <p>Dear <strong>{customer_name}</strong>,</p>
+  <p>Dear <strong>{safe_customer}</strong>,</p>
   <p>Please find your invoice details below:</p>
   <table style='width:100%;border-collapse:collapse;margin:16px 0'>
     <thead><tr style='background:#f1f5f9'>
@@ -269,6 +417,8 @@ def send_invoice_email(customer_name, customer_email, invoice_number, items, tot
 
 
 def send_reminder_email(customer_name, customer_email, invoice_number, total_amount, days_overdue, business_email=""):
+    customer_name = _esc(str(customer_name))
+    invoice_number = _esc(str(invoice_number))
     html = f"""<html><body style='font-family:Arial,sans-serif;color:#1a1a2e;max-width:600px;margin:auto'>
 <div style='background:#0d3d26;padding:24px;border-radius:8px 8px 0 0'>
   <h1 style='color:white;margin:0;font-size:22px'>Payment Reminder</h1>
@@ -286,13 +436,15 @@ def send_reminder_email(customer_name, customer_email, invoice_number, total_amo
 
 
 def send_welcome_email(customer_name, customer_email, business_name):
+    safe_customer = _esc(str(customer_name))
+    safe_business = _esc(str(business_name))
     html = f"""<html><body style='font-family:Arial,sans-serif;color:#1a1a2e;max-width:600px;margin:auto'>
 <div style='background:#0d3d26;padding:24px;border-radius:8px 8px 0 0'>
-  <h1 style='color:white;margin:0;font-size:22px'>Welcome to {business_name}!</h1>
+  <h1 style='color:white;margin:0;font-size:22px'>Welcome to {safe_business}!</h1>
 </div>
 <div style='padding:24px;border:1px solid #e8eaed;border-top:none;border-radius:0 0 8px 8px'>
-  <p>Dear <strong>{customer_name}</strong>,</p>
-  <p>You have been added as a customer of <strong>{business_name}</strong>.</p>
+  <p>Dear <strong>{safe_customer}</strong>,</p>
+  <p>You have been added as a customer of <strong>{safe_business}</strong>.</p>
   <p>You will receive invoices and updates from us going forward.</p>
   <p>Thank you for your business!</p>
   <p style='color:#666;font-size:13px'>Powered by <strong>Prosper Assistant</strong> · prosperassistant.online</p>

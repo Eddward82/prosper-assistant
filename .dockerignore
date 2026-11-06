@@ -1,0 +1,34 @@
+# Secrets must never be baked into the image — they come from Cloud Run env vars
+.env
+.env.*
+!.env.example
+all_env.yaml
+
+# VCS / local state
+.git
+.gitignore
+.firebase
+.firebaserc
+firebase.json
+firebase-debug.log
+__pycache__/
+*.pyc
+
+# Frontend is served by Firebase Hosting, not the container
+index.html
+dashboard.html
+dash_live.html
+404.html
+privacy.html
+terms.html
+prosper-logo.svg
+
+# Local artifacts and one-off scripts
+*.png
+*.log
+README.md
+LICENSE
+add_phone_field.py
+fix_customers.py
+migrate_data.py
+Dockerfile
